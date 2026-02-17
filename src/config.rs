@@ -31,5 +31,5 @@ pub const NN_LOOKBACK_DAYS: usize = 60;
 pub const NN_FORWARD_DAYS: usize = 5;
 pub const NN_HIDDEN_SIZE: usize = 64;
 pub const NN_LEARNING_RATE: f64 = 1e-3;
-pub const NN_EPOCHS: usize = 2000;
+pub const NN_EPOCHS: usize = 1000;
 pub const NN_BATCH_SIZE: usize = 32;

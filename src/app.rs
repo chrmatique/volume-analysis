@@ -5,7 +5,8 @@ use eframe::egui;
 use crate::analysis;
 use crate::config;
 use crate::data::models::{
-    BondSpread, ComputeStats, CorrelationMatrix, MarketData, TrainingStatus, VolatilityMetrics,
+    BondSpread, ComputeStats, CorrelationMatrix, KurtosisMetrics, MarketData, TrainingStatus,
+    VolatilityMetrics,
 };
 use crate::nn::training::TrainingProgress;
 use crate::ui;
@@ -17,6 +18,7 @@ pub enum Tab {
     SectorVol,
     Correlations,
     Bonds,
+    Kurtosis,
     NeuralNet,
 }
 
@@ -27,6 +29,7 @@ pub struct AnalysisResults {
     pub correlation: Option<CorrelationMatrix>,
     pub bond_spreads: Vec<BondSpread>,
     pub avg_cross_correlation: f64,
+    pub kurtosis: Vec<KurtosisMetrics>,
 }
 
 /// Shared application state
@@ -111,11 +114,31 @@ impl AppState {
         // Bond spreads
         let spreads = analysis::bond_spreads::compute_term_spreads(&self.market_data.treasury_rates);
 
+        // Kurtosis
+        let mut kurtosis_metrics = Vec::new();
+        for sector in &self.market_data.sectors {
+            let log_ret = sector.log_returns();
+            if log_ret.len() < config::LONG_VOL_WINDOW {
+                continue;
+            }
+            let dates = sector.dates();
+            // Use dates offset by 1 to align with log returns
+            let ret_dates = if dates.len() > 1 { &dates[1..] } else { &dates };
+            let km = analysis::kurtosis::compute_sector_kurtosis(
+                &sector.symbol,
+                ret_dates,
+                &log_ret,
+                config::LONG_VOL_WINDOW,
+            );
+            kurtosis_metrics.push(km);
+        }
+
         self.analysis = AnalysisResults {
             volatility: vol_metrics,
             correlation: Some(corr),
             bond_spreads: spreads,
             avg_cross_correlation: avg_corr,
+            kurtosis: kurtosis_metrics,
         };
     }
 }
@@ -243,6 +266,7 @@ impl eframe::App for MktNoiseApp {
                     "Correlations",
                 );
                 ui.selectable_value(&mut self.state.active_tab, Tab::Bonds, "Bonds");
+                ui.selectable_value(&mut self.state.active_tab, Tab::Kurtosis, "Kurtosis");
                 ui.selectable_value(&mut self.state.active_tab, Tab::NeuralNet, "Neural Net");
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -269,6 +293,7 @@ impl eframe::App for MktNoiseApp {
             Tab::SectorVol => ui::sector_view::render(ui, &mut self.state),
             Tab::Correlations => ui::correlation_view::render(ui, &mut self.state),
             Tab::Bonds => ui::bond_view::render(ui, &mut self.state),
+            Tab::Kurtosis => ui::kurtosis_view::render(ui, &mut self.state),
             Tab::NeuralNet => ui::nn_view::render(ui, &mut self.state),
         });
     }

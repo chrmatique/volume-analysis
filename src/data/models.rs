@@ -113,6 +113,24 @@ pub struct VolatilityMetrics {
     pub vol_ratio: Vec<f64>,
 }
 
+/// Kurtosis and distribution metrics for a sector
+#[derive(Debug, Clone)]
+pub struct KurtosisMetrics {
+    pub symbol: String,
+    pub mean: f64,
+    pub std_dev: f64,
+    pub excess_kurtosis: f64,
+    pub skewness: f64,
+    pub jarque_bera: f64,
+    pub rolling_dates: Vec<NaiveDate>,
+    pub rolling_kurtosis: Vec<f64>,
+    pub rolling_skewness: Vec<f64>,
+    /// Empirical density curve: Vec of [x, density]
+    pub empirical_density: Vec<[f64; 2]>,
+    /// Fitted normal density curve: Vec of [x, density]
+    pub normal_density: Vec<[f64; 2]>,
+}
+
 /// Correlation matrix result
 #[derive(Debug, Clone)]
 pub struct CorrelationMatrix {

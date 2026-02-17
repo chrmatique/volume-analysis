@@ -41,6 +41,7 @@ pub struct AppState {
     pub training_losses: Vec<f64>,
     pub nn_predictions: Vec<(String, f64)>,
     pub compute_stats: ComputeStats,
+    pub use_gpu: bool,
     pub training_progress: Option<TrainingProgress>,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
@@ -59,6 +60,7 @@ impl Default for AppState {
             training_losses: vec![],
             nn_predictions: vec![],
             compute_stats: ComputeStats::default(),
+            use_gpu: true,
             training_progress: None,
             data_receiver: None,
         }

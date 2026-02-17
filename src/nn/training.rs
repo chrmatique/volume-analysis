@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use burn::{
-    backend::{Autodiff, NdArray},
+    backend::{Autodiff, NdArray, Wgpu},
     data::dataloader::DataLoaderBuilder,
     module::AutodiffModule,
     module::Module,
@@ -17,8 +17,11 @@ use crate::data::models::{ComputeStats, MarketData, TrainingStatus};
 use crate::nn::dataset::{build_dataset, VolBatcher};
 use crate::nn::model::{VolPredictionModelConfig, NUM_FEATURES, OUTPUT_SIZE};
 
-/// Training backend: NdArray with autodiff (CPU-based, reliable)
-pub type TrainingBackend = Autodiff<NdArray>;
+/// GPU training backend: Wgpu with autodiff
+pub type GpuBackend = Autodiff<Wgpu>;
+
+/// CPU training backend: NdArray with autodiff
+pub type CpuBackend = Autodiff<NdArray>;
 
 /// Shared state for communicating training progress to the UI
 #[derive(Clone)]
@@ -37,10 +40,7 @@ impl TrainingProgress {
             losses: Arc::new(Mutex::new(Vec::new())),
             predictions: Arc::new(Mutex::new(Vec::new())),
             pause_flag: Arc::new(AtomicBool::new(false)),
-            compute_stats: Arc::new(Mutex::new(ComputeStats {
-                backend_name: "NdArray (CPU) + Autodiff".to_string(),
-                ..Default::default()
-            })),
+            compute_stats: Arc::new(Mutex::new(ComputeStats::default())),
         }
     }
 
@@ -57,18 +57,59 @@ impl TrainingProgress {
     }
 }
 
-/// Run the full training pipeline
-pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
-    let device = <NdArray as burn::tensor::backend::Backend>::Device::default();
+/// Run the full training pipeline, selecting GPU or CPU backend.
+pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: bool) {
+    // Detect GPU via nvidia-smi
+    let gpu_info = crate::nn::gpu::detect_nvidia_gpu();
 
+    // Populate initial GPU detection info
+    if let Ok(mut stats) = progress.compute_stats.lock() {
+        if let Some(ref info) = gpu_info {
+            stats.gpu_detected = true;
+            stats.gpu_name = Some(info.name.clone());
+            stats.gpu_vram_total_mb = Some(info.vram_total_mb);
+            stats.gpu_vram_used_mb = Some(info.vram_used_mb);
+            stats.gpu_utilization_percent = Some(info.utilization_percent);
+            stats.gpu_temperature_c = Some(info.temperature_c);
+        }
+    }
+
+    if use_gpu {
+        // Set backend name
+        let backend_label = format!(
+            "WGPU GPU: {}",
+            gpu_info.as_ref().map(|i| i.name.as_str()).unwrap_or("Default")
+        );
+        if let Ok(mut stats) = progress.compute_stats.lock() {
+            stats.backend_name = backend_label;
+            stats.using_gpu = true;
+        }
+
+        tracing::info!("Starting GPU training with Wgpu backend");
+        let device = <Wgpu as burn::tensor::backend::Backend>::Device::default();
+        train_impl::<GpuBackend>(device, market_data, progress);
+    } else {
+        if let Ok(mut stats) = progress.compute_stats.lock() {
+            stats.backend_name = "NdArray (CPU) + Autodiff".to_string();
+            stats.using_gpu = false;
+        }
+
+        tracing::info!("Starting CPU training with NdArray backend");
+        let device = <NdArray as burn::tensor::backend::Backend>::Device::default();
+        train_impl::<CpuBackend>(device, market_data, progress);
+    }
+}
+
+/// Generic training implementation that works with any autodiff backend.
+fn train_impl<B: AutodiffBackend>(
+    device: B::Device,
+    market_data: &MarketData,
+    progress: &TrainingProgress,
+) {
     // System info for compute stats
     let mut sys = System::new_all();
     sys.refresh_all();
-
     let total_memory_mb = sys.total_memory() / (1024 * 1024);
-
-    // Update initial stats
-    update_compute_stats(progress, &mut sys, total_memory_mb, 0, 0.0, 0);
 
     // Update status
     set_status(progress, TrainingStatus::Training {
@@ -103,7 +144,7 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
 
     let train_dataset = crate::nn::dataset::VolDataset { samples: train_samples };
 
-    let batcher = VolBatcher::<TrainingBackend>::new(device.clone());
+    let batcher = VolBatcher::<B>::new(device.clone());
 
     let dataloader = DataLoaderBuilder::new(batcher)
         .batch_size(config::NN_BATCH_SIZE)
@@ -116,9 +157,12 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
         hidden_size: config::NN_HIDDEN_SIZE,
         output_size: OUTPUT_SIZE,
     };
-    let mut model = model_config.init::<TrainingBackend>(&device);
+    let mut model = model_config.init::<B>(&device);
 
     let param_count = model.num_params();
+
+    // Update initial compute stats
+    update_compute_stats(progress, &mut sys, total_memory_mb, 0, 0.0, param_count);
 
     // Optimizer
     let mut optim = AdamConfig::new().init();
@@ -212,19 +256,20 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
             loss: avg_loss,
         });
 
-        // Update compute stats
+        // Update compute stats (including live GPU stats via nvidia-smi)
         update_compute_stats(progress, &mut sys, total_memory_mb, epoch_ms, samples_per_sec, param_count);
+        update_gpu_live_stats(progress);
     }
 
-    // Generate predictions using the trained model's inference mode
-    let inference_device = <NdArray as burn::tensor::backend::Backend>::Device::default();
+    // Generate predictions using the trained model in inference mode
     let valid_model = model.valid();
-    generate_predictions(&valid_model, market_data, &inference_device, progress);
+    let inference_device = <B::InnerBackend as burn::tensor::backend::Backend>::Device::default();
+    generate_predictions::<B::InnerBackend>(&valid_model, market_data, &inference_device, progress);
 
     set_status(progress, TrainingStatus::Complete { final_loss: best_loss });
 }
 
-/// Update compute/resource stats
+/// Update CPU/memory compute stats
 fn update_compute_stats(
     progress: &TrainingProgress,
     sys: &mut System,
@@ -246,6 +291,17 @@ fn update_compute_stats(
         stats.epoch_duration_ms = epoch_ms;
         stats.samples_per_sec = samples_per_sec;
         stats.total_params = param_count;
+    }
+}
+
+/// Poll nvidia-smi for live GPU utilization, VRAM, and temperature
+fn update_gpu_live_stats(progress: &TrainingProgress) {
+    if let Some(info) = crate::nn::gpu::poll_gpu_stats() {
+        if let Ok(mut stats) = progress.compute_stats.lock() {
+            stats.gpu_vram_used_mb = Some(info.vram_used_mb);
+            stats.gpu_utilization_percent = Some(info.utilization_percent);
+            stats.gpu_temperature_c = Some(info.temperature_c);
+        }
     }
 }
 

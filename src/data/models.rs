@@ -140,6 +140,14 @@ pub struct ComputeStats {
     pub epoch_duration_ms: u64,
     pub samples_per_sec: f64,
     pub total_params: usize,
+    // GPU fields
+    pub gpu_detected: bool,
+    pub gpu_name: Option<String>,
+    pub gpu_vram_total_mb: Option<u64>,
+    pub gpu_vram_used_mb: Option<u64>,
+    pub gpu_utilization_percent: Option<f32>,
+    pub gpu_temperature_c: Option<f32>,
+    pub using_gpu: bool,
 }
 
 impl Default for TrainingStatus {

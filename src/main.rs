@@ -18,7 +18,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "Market Noise Analysis",
+        "Volume Analysis",
         options,
         Box::new(|_cc| Ok(Box::new(MktNoiseApp::default()))),
     )

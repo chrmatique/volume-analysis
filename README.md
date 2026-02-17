@@ -1,4 +1,4 @@
-# Market Noise Analysis
+# Sector Volatility Analysis
 
 A Rust desktop application for analyzing market structure by modeling sector volatility, cross-sector correlations, bond spreads, and training a local neural network for volatility regime prediction.
 

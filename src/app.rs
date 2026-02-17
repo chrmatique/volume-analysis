@@ -4,6 +4,7 @@ use eframe::egui;
 
 use crate::analysis;
 use crate::config;
+use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
     BondSpread, ComputeStats, CorrelationMatrix, KurtosisMetrics, MarketData, TrainingStatus,
     VolatilityMetrics,
@@ -30,6 +31,30 @@ pub struct AnalysisResults {
     pub bond_spreads: Vec<BondSpread>,
     pub avg_cross_correlation: f64,
     pub kurtosis: Vec<KurtosisMetrics>,
+    pub randomness: Vec<SectorRandomness>,
+}
+
+/// State for the 3D probability distribution plot on the dashboard
+pub struct Plot3DState {
+    pub pitch: f32,
+    pub yaw: f32,
+    pub sector_x_idx: usize,
+    pub sector_y_idx: usize,
+    pub texture: Option<egui::TextureHandle>,
+    pub needs_redraw: bool,
+}
+
+impl Default for Plot3DState {
+    fn default() -> Self {
+        Self {
+            pitch: 0.35,
+            yaw: 0.75,
+            sector_x_idx: 0,
+            sector_y_idx: 1,
+            texture: None,
+            needs_redraw: true,
+        }
+    }
 }
 
 /// Shared application state
@@ -46,6 +71,7 @@ pub struct AppState {
     pub compute_stats: ComputeStats,
     pub use_gpu: bool,
     pub training_progress: Option<TrainingProgress>,
+    pub plot_3d: Plot3DState,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
 }
@@ -65,6 +91,7 @@ impl Default for AppState {
             compute_stats: ComputeStats::default(),
             use_gpu: true,
             training_progress: None,
+            plot_3d: Plot3DState::default(),
             data_receiver: None,
         }
     }
@@ -133,13 +160,28 @@ impl AppState {
             kurtosis_metrics.push(km);
         }
 
+        // Randomness metrics
+        let mut randomness_metrics = Vec::new();
+        for sector in &self.market_data.sectors {
+            let log_ret = sector.log_returns();
+            if log_ret.len() >= 20 {
+                randomness_metrics.push(
+                    analysis::randomness::compute_sector_randomness(&sector.symbol, &log_ret),
+                );
+            }
+        }
+
         self.analysis = AnalysisResults {
             volatility: vol_metrics,
             correlation: Some(corr),
             bond_spreads: spreads,
             avg_cross_correlation: avg_corr,
             kurtosis: kurtosis_metrics,
+            randomness: randomness_metrics,
         };
+
+        // Signal the 3D plot needs a redraw with new data
+        self.plot_3d.needs_redraw = true;
     }
 }
 
@@ -287,14 +329,18 @@ impl eframe::App for MktNoiseApp {
             });
         });
 
-        // Central panel with active tab content
-        egui::CentralPanel::default().show(ctx, |ui| match self.state.active_tab {
-            Tab::Dashboard => ui::dashboard::render(ui, &mut self.state),
-            Tab::SectorVol => ui::sector_view::render(ui, &mut self.state),
-            Tab::Correlations => ui::correlation_view::render(ui, &mut self.state),
-            Tab::Bonds => ui::bond_view::render(ui, &mut self.state),
-            Tab::Kurtosis => ui::kurtosis_view::render(ui, &mut self.state),
-            Tab::NeuralNet => ui::nn_view::render(ui, &mut self.state),
+        // Central panel with active tab content (scrollable when content overflows)
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui| match self.state.active_tab {
+                    Tab::Dashboard => ui::dashboard::render(ui, &mut self.state),
+                    Tab::SectorVol => ui::sector_view::render(ui, &mut self.state),
+                    Tab::Correlations => ui::correlation_view::render(ui, &mut self.state),
+                    Tab::Bonds => ui::bond_view::render(ui, &mut self.state),
+                    Tab::Kurtosis => ui::kurtosis_view::render(ui, &mut self.state),
+                    Tab::NeuralNet => ui::nn_view::render(ui, &mut self.state),
+                });
         });
     }
 }

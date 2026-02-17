@@ -17,7 +17,7 @@ pub const SECTOR_ETFS: &[(&str, &str)] = &[
 pub const BENCHMARK_SYMBOL: &str = "SPY";
 
 /// Financial Modeling Prep API key
-pub const FMP_API_KEY: &str = "ftR1pTvpZKHkrFZcAAIt7kPJln0nkfwI";
+pub const FMP_API_KEY: &str = "";
 
 /// Default historical lookback in calendar days (~2 years)
 pub const DEFAULT_LOOKBACK_DAYS: u32 = 730;

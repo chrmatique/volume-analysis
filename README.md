@@ -103,16 +103,16 @@ src/
 
 
 #### Dashboard
-![Dashboard](ex-images/dashboard.png)
+![Dashboard](./ex-images/dashboard.png)
 
 #### Sector Volume Overview
-![Sector Volume](ex-images/overview.png)
+![Sector Volume](./ex-images/overview.png)
 
 #### US Bond Yield Curve
-![Bond Curve](ex-images/curve.png)
+![Bond Curve](./ex-images/curve.png)
 
 #### Sector Kurtosis
-![Kurtosis](ex-images/kurtosis.png)
+![Kurtosis](./ex-images/kurtosis.png)
 
 #### Neural Net Training
-![Neural Training](ex-images/training.png)
+![Neural Training](./ex-images/training.png)

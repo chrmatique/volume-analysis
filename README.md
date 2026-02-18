@@ -97,3 +97,22 @@ src/
 - **Features (26)**: 11 sector rolling vols, 11 sector returns, avg cross-correlation, 10Y-2Y spread, curve slope, VIX proxy
 - **Training**: Sliding 60-day windows, MSE loss, Adam optimizer, 80/20 chronological split
 - **Output**: 5-day forward realized volatility prediction
+
+
+## Example Images
+
+
+#### Dashboard
+![Dashboard](ex-images/dashboard.png)
+
+#### Sector Volume Overview
+![Sector Volume](ex-images/overview.png)
+
+#### US Bond Yield Curve
+![Bond Curve](ex-images/curve.png)
+
+#### Sector Kurtosis
+![Kurtosis](ex-images/kurtosis.png)
+
+#### Neural Net Training
+![Neural Training](ex-images/training.png)

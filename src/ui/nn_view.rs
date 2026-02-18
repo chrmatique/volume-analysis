@@ -43,6 +43,14 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         }
     }
 
+    // After training completes, load the saved model so we have it for future inference
+    if matches!(state.training_status, TrainingStatus::Complete { .. }) && state.loaded_model.is_none() {
+        if let Some((model, meta)) = crate::nn::persistence::load_model() {
+            state.loaded_model = Some(model);
+            state.model_metadata = Some(meta);
+        }
+    }
+
     // Device selector (only when idle or complete -- can't switch mid-training)
     let is_training = matches!(
         state.training_status,
@@ -91,12 +99,38 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(4.0);
     }
 
+    // Model loaded from disk indicator
+    if let Some(ref meta) = state.model_metadata {
+        ui.horizontal(|ui| {
+            ui.colored_label(
+                egui::Color32::from_rgb(100, 180, 255),
+                format!("Model loaded from disk (trained {}; loss: {:.6})", meta.trained_at, meta.final_loss),
+            );
+        });
+        ui.add_space(4.0);
+    }
+
     // Training controls
     ui.horizontal(|ui| {
         match &state.training_status {
             TrainingStatus::Idle => {
                 if ui.button("Train Model").clicked() {
                     start_training(state);
+                }
+                if state.loaded_model.is_some() {
+                    if ui.button("Run Inference").clicked() {
+                        if let Some(ref model) = state.loaded_model {
+                            let preds = crate::nn::training::run_inference(model, &state.market_data);
+                            if !preds.is_empty() {
+                                state.nn_predictions = preds;
+                                if let Some(ref meta) = state.model_metadata {
+                                    state.training_status = TrainingStatus::Complete {
+                                        final_loss: meta.final_loss,
+                                    };
+                                }
+                            }
+                        }
+                    }
                 }
             }
             TrainingStatus::Training {
@@ -159,6 +193,16 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     state.training_losses.clear();
                     state.nn_predictions.clear();
                     state.training_progress = None;
+                }
+                if state.loaded_model.is_some() {
+                    if ui.button("Run Inference").clicked() {
+                        if let Some(ref model) = state.loaded_model {
+                            let preds = crate::nn::training::run_inference(model, &state.market_data);
+                            if !preds.is_empty() {
+                                state.nn_predictions = preds;
+                            }
+                        }
+                    }
                 }
             }
             TrainingStatus::Error(msg) => {

@@ -9,7 +9,9 @@ use crate::data::models::{
     BondSpread, ComputeStats, CorrelationMatrix, KurtosisMetrics, MarketData, TrainingStatus,
     VolatilityMetrics,
 };
+use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
+use crate::nn::LoadedModel;
 use crate::ui;
 
 /// Active tab in the main UI
@@ -72,12 +74,23 @@ pub struct AppState {
     pub use_gpu: bool,
     pub training_progress: Option<TrainingProgress>,
     pub plot_3d: Plot3DState,
+    /// Loaded model from disk (avoids retraining on each launch)
+    pub loaded_model: Option<LoadedModel>,
+    pub model_metadata: Option<ModelMetadata>,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
+        let (loaded_model, model_metadata) = match crate::nn::persistence::load_model() {
+            Some((model, meta)) => {
+                tracing::info!("Loaded saved model (trained {})", meta.trained_at);
+                (Some(model), Some(meta))
+            }
+            None => (None, None),
+        };
+
         Self {
             active_tab: Tab::Dashboard,
             market_data: MarketData::default(),
@@ -92,6 +105,8 @@ impl Default for AppState {
             use_gpu: true,
             training_progress: None,
             plot_3d: Plot3DState::default(),
+            loaded_model,
+            model_metadata,
             data_receiver: None,
         }
     }
@@ -285,6 +300,20 @@ impl MktNoiseApp {
                     .unwrap_or("N/A")
             );
             self.state.data_receiver = None;
+
+            // Run inference with loaded model if available (avoids retraining)
+            if let Some(ref model) = self.state.loaded_model {
+                let preds = crate::nn::training::run_inference(model, &self.state.market_data);
+                if !preds.is_empty() {
+                    self.state.nn_predictions = preds;
+                    if let Some(ref meta) = self.state.model_metadata {
+                        self.state.training_status =
+                            crate::data::models::TrainingStatus::Complete {
+                                final_loss: meta.final_loss,
+                            };
+                    }
+                }
+            }
         }
     }
 }

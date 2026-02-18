@@ -267,6 +267,11 @@ fn train_impl<B: AutodiffBackend>(
     generate_predictions::<B::InnerBackend>(&valid_model, market_data, &inference_device, progress);
 
     set_status(progress, TrainingStatus::Complete { final_loss: best_loss });
+
+    // Save model to disk in compressed format for future sessions
+    if let Err(e) = crate::nn::persistence::save_model(&valid_model, best_loss) {
+        tracing::warn!("Failed to save trained model: {}", e);
+    }
 }
 
 /// Update CPU/memory compute stats
@@ -315,13 +320,21 @@ fn mse_loss<B: AutodiffBackend>(
     sq.mean().unsqueeze()
 }
 
-/// Generate predictions for each sector using the trained model
-fn generate_predictions<B: burn::tensor::backend::Backend>(
+/// Run inference with a trained model and return predictions for each sector.
+/// Public for use when loading a saved model from disk.
+pub fn run_inference(
+    model: &crate::nn::model::VolPredictionModel<burn::backend::NdArray>,
+    market_data: &MarketData,
+) -> Vec<(String, f64)> {
+    let device = <burn::backend::NdArray as burn::tensor::backend::Backend>::Device::default();
+    run_inference_impl(model, market_data, &device)
+}
+
+fn run_inference_impl<B: burn::tensor::backend::Backend>(
     model: &crate::nn::model::VolPredictionModel<B>,
     market_data: &MarketData,
     device: &B::Device,
-    progress: &TrainingProgress,
-) {
+) -> Vec<(String, f64)> {
     let dataset = build_dataset(market_data, config::NN_LOOKBACK_DAYS, config::NN_FORWARD_DAYS);
 
     if let Some(last_sample) = dataset.samples.last() {
@@ -342,14 +355,26 @@ fn generate_predictions<B: burn::tensor::backend::Backend>(
         let pred_val = pred.into_data().to_vec::<f32>().unwrap_or_default();
         let predicted_vol = pred_val.first().copied().unwrap_or(0.0) as f64;
 
-        let mut predictions = Vec::new();
-        for sector in &market_data.sectors {
-            predictions.push((sector.symbol.clone(), predicted_vol));
-        }
+        return market_data
+            .sectors
+            .iter()
+            .map(|s| (s.symbol.clone(), predicted_vol))
+            .collect();
+    }
 
-        if let Ok(mut preds) = progress.predictions.lock() {
-            *preds = predictions;
-        }
+    vec![]
+}
+
+/// Generate predictions for each sector using the trained model
+fn generate_predictions<B: burn::tensor::backend::Backend>(
+    model: &crate::nn::model::VolPredictionModel<B>,
+    market_data: &MarketData,
+    device: &B::Device,
+    progress: &TrainingProgress,
+) {
+    let predictions = run_inference_impl(model, market_data, device);
+    if let Ok(mut preds) = progress.predictions.lock() {
+        *preds = predictions;
     }
 }
 

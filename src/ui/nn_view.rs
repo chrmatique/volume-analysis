@@ -18,8 +18,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     // Model info
     ui.group(|ui| {
         ui.label("Model Architecture: LSTM (hidden=64) -> Linear");
-        ui.label("Input: 26 features (11 sector vols + 11 returns + cross-corr + spread + slope + VIX-proxy)");
-        ui.label("Output: 5-day forward realized volatility prediction");
+        ui.label("Input: 70 features (vols, returns, randomness, kurtosis, cross-corr, spread, slope, VIX-proxy)");
+        ui.label("Output: 5-day forward vol + entropy + kurtosis/skewness per sector");
         ui.label(format!(
             "Lookback: {} trading days per sample",
             crate::config::NN_LOOKBACK_DAYS
@@ -135,7 +135,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         if let Some(ref model) = state.loaded_model {
                             let preds = crate::nn::training::run_inference(model, &state.market_data);
                             if !preds.is_empty() {
-                                state.nn_predictions = preds;
+                                state.nn_predictions = preds.clone();
                                 if let Some(ref meta) = state.model_metadata {
                                     state.training_status = TrainingStatus::Complete {
                                         final_loss: meta.final_loss,
@@ -197,7 +197,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 if ui.button("Retrain").clicked() {
                     state.training_status = TrainingStatus::Idle;
                     state.training_losses.clear();
-                    state.nn_predictions.clear();
+                    state.nn_predictions = crate::data::models::NnPredictions::default();
                     state.training_progress = None;
                 }
                 if state.loaded_model.is_some() {
@@ -205,7 +205,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         if let Some(ref model) = state.loaded_model {
                             let preds = crate::nn::training::run_inference(model, &state.market_data);
                             if !preds.is_empty() {
-                                state.nn_predictions = preds;
+                                state.nn_predictions = preds.clone();
                             }
                         }
                     }
@@ -270,33 +270,79 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
     ui.add_space(8.0);
 
-    // Predictions table
+    // Predictions: three columns left-to-right (Vol | Randomness | Kurtosis)
     if !state.nn_predictions.is_empty() {
-        ui.heading("Predictions (5-Day Forward Vol)");
+        ui.heading("5-Day Forward Predictions");
         ui.add_space(4.0);
 
-        egui::Grid::new("predictions_table")
-            .striped(true)
-            .min_col_width(100.0)
-            .show(ui, |ui| {
-                ui.strong("Sector");
-                ui.strong("Predicted Vol (%)");
-                ui.end_row();
-
-                for (sector, vol) in &state.nn_predictions {
-                    ui.label(sector);
-                    let vol_pct = vol * 100.0;
-                    let color = if vol_pct > 30.0 {
-                        egui::Color32::from_rgb(220, 50, 50)
-                    } else if vol_pct > 20.0 {
-                        egui::Color32::from_rgb(220, 150, 50)
-                    } else {
-                        egui::Color32::from_rgb(50, 180, 50)
-                    };
-                    ui.colored_label(color, format!("{:.2}%", vol_pct));
-                    ui.end_row();
-                }
+        ui.columns(3, |cols| {
+            // Column 1: Vol
+            cols[0].group(|ui| {
+                ui.strong("Volatility");
+                ui.add_space(4.0);
+                egui::Grid::new("pred_vol_grid")
+                    .striped(true)
+                    .min_col_width(80.0)
+                    .show(ui, |ui| {
+                        ui.strong("Sector");
+                        ui.strong("Vol (%)");
+                        ui.end_row();
+                        for (sector, vol) in &state.nn_predictions.vol {
+                            ui.label(sector);
+                            let vol_pct = vol * 100.0;
+                            let color = if vol_pct > 30.0 {
+                                egui::Color32::from_rgb(220, 50, 50)
+                            } else if vol_pct > 20.0 {
+                                egui::Color32::from_rgb(220, 150, 50)
+                            } else {
+                                egui::Color32::from_rgb(50, 180, 50)
+                            };
+                            ui.colored_label(color, format!("{:.2}%", vol_pct));
+                            ui.end_row();
+                        }
+                    });
             });
+
+            // Column 2: Randomness (entropy)
+            cols[1].group(|ui| {
+                ui.strong("Randomness");
+                ui.add_space(4.0);
+                egui::Grid::new("pred_randomness_grid")
+                    .striped(true)
+                    .min_col_width(80.0)
+                    .show(ui, |ui| {
+                        ui.strong("Sector");
+                        ui.strong("Entropy");
+                        ui.end_row();
+                        for (sector, entropy) in &state.nn_predictions.randomness {
+                            ui.label(sector);
+                            ui.label(format!("{:.3}", entropy));
+                            ui.end_row();
+                        }
+                    });
+            });
+
+            // Column 3: Kurtosis
+            cols[2].group(|ui| {
+                ui.strong("Kurtosis");
+                ui.add_space(4.0);
+                egui::Grid::new("pred_kurtosis_grid")
+                    .striped(true)
+                    .min_col_width(70.0)
+                    .show(ui, |ui| {
+                        ui.strong("Sector");
+                        ui.strong("Kurt");
+                        ui.strong("Skew");
+                        ui.end_row();
+                        for (sector, k, s) in &state.nn_predictions.kurtosis {
+                            ui.label(sector);
+                            ui.label(format!("{:.2}", k));
+                            ui.label(format!("{:.2}", s));
+                            ui.end_row();
+                        }
+                    });
+            });
+        });
     } else if matches!(state.training_status, TrainingStatus::Idle) {
         ui.add_space(8.0);
         ui.label("No predictions yet. Train the model to generate predictions.");
@@ -569,7 +615,7 @@ fn start_training(state: &mut AppState) {
         loss: f64::NAN,
     };
     state.training_losses.clear();
-    state.nn_predictions.clear();
+    state.nn_predictions = crate::data::models::NnPredictions::default();
 
     let market_data = state.market_data.clone();
     let use_gpu = state.use_gpu;

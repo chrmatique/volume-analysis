@@ -131,6 +131,20 @@ pub struct KurtosisMetrics {
     pub normal_density: Vec<[f64; 2]>,
 }
 
+/// NN predictions for vol, randomness (entropy), and kurtosis per sector
+#[derive(Debug, Clone, Default)]
+pub struct NnPredictions {
+    pub vol: Vec<(String, f64)>,
+    pub randomness: Vec<(String, f64)>,
+    pub kurtosis: Vec<(String, f64, f64)>,
+}
+
+impl NnPredictions {
+    pub fn is_empty(&self) -> bool {
+        self.vol.is_empty() && self.randomness.is_empty() && self.kurtosis.is_empty()
+    }
+}
+
 /// Correlation matrix result
 #[derive(Debug, Clone)]
 pub struct CorrelationMatrix {

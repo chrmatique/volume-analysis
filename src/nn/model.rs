@@ -59,8 +59,8 @@ impl<B: Backend> VolPredictionModel<B> {
 }
 
 /// Number of input features per time step
-/// 11 sector rolling vols + 11 sector returns + avg cross-corr + 10Y-2Y spread + curve slope + VIX proxy
-pub const NUM_FEATURES: usize = 26;
+/// 26 base + 22 randomness (entropy, hurst per sector) + 22 kurtosis (kurtosis, skew per sector)
+pub const NUM_FEATURES: usize = 70;
 
-/// Output size (predicted forward realized vol)
-pub const OUTPUT_SIZE: usize = 1;
+/// Output size: 1 vol + 11 entropy + 22 (kurtosis, skew per sector)
+pub const OUTPUT_SIZE: usize = 34;

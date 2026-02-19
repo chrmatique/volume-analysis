@@ -7,7 +7,7 @@ use crate::config;
 use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
     BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo, KurtosisMetrics, MarketData,
-    TrainingStatus, VolatilityMetrics,
+    NnPredictions, TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
@@ -101,7 +101,7 @@ pub struct AppState {
     pub is_loading: bool,
     pub training_status: TrainingStatus,
     pub training_losses: Vec<f64>,
-    pub nn_predictions: Vec<(String, f64)>,
+    pub nn_predictions: NnPredictions,
     pub compute_stats: ComputeStats,
     pub use_gpu: bool,
     pub training_progress: Option<TrainingProgress>,
@@ -140,7 +140,7 @@ impl Default for AppState {
             is_loading: false,
             training_status: TrainingStatus::Idle,
             training_losses: vec![],
-            nn_predictions: vec![],
+            nn_predictions: NnPredictions::default(),
             compute_stats: ComputeStats::default(),
             use_gpu,
             training_progress: None,
@@ -352,7 +352,7 @@ impl MktNoiseApp {
             if let Some(ref model) = self.state.loaded_model {
                 let preds = crate::nn::training::run_inference(model, &self.state.market_data);
                 if !preds.is_empty() {
-                    self.state.nn_predictions = preds;
+                    self.state.nn_predictions = preds.clone();
                     if let Some(ref meta) = self.state.model_metadata {
                         self.state.training_status =
                             crate::data::models::TrainingStatus::Complete {

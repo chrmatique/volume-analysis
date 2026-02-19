@@ -188,6 +188,33 @@ pub fn hurst_exponent(data: &[f64]) -> f64 {
     h.clamp(0.0, 1.0)
 }
 
+/// Rolling randomness metrics for each sliding window.
+/// Returns (entropy, hurst_exponent, autocorr_lag1, autocorr_lag5) per window.
+/// Use window >= 20 for stable Hurst estimates.
+pub fn rolling_sector_randomness(
+    returns: &[f64],
+    window: usize,
+) -> Vec<(f64, f64, f64, f64)> {
+    if returns.len() < window || window < 2 {
+        return vec![];
+    }
+    let n_windows = returns.len() - window + 1;
+    let mut out = Vec::with_capacity(n_windows);
+    for i in 0..n_windows {
+        let slice = &returns[i..i + window];
+        let entropy = shannon_entropy(slice, 50);
+        let hurst = hurst_exponent(slice);
+        let ac1 = autocorrelation(slice, 1);
+        let ac5 = if window > 5 {
+            autocorrelation(slice, 5)
+        } else {
+            0.0
+        };
+        out.push((entropy, hurst, ac1, ac5));
+    }
+    out
+}
+
 /// Compute all randomness metrics for a sector
 pub fn compute_sector_randomness(symbol: &str, log_returns: &[f64]) -> SectorRandomness {
     SectorRandomness {

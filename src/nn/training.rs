@@ -13,7 +13,7 @@ use burn::{
 use sysinfo::System;
 
 use crate::config;
-use crate::data::models::{ComputeStats, MarketData, TrainingStatus};
+use crate::data::models::{ComputeStats, MarketData, NnPredictions, TrainingStatus};
 use crate::nn::dataset::{build_dataset, VolBatcher};
 use crate::nn::model::{VolPredictionModelConfig, NUM_FEATURES, OUTPUT_SIZE};
 
@@ -28,7 +28,7 @@ pub type CpuBackend = Autodiff<NdArray>;
 pub struct TrainingProgress {
     pub status: Arc<Mutex<TrainingStatus>>,
     pub losses: Arc<Mutex<Vec<f64>>>,
-    pub predictions: Arc<Mutex<Vec<(String, f64)>>>,
+    pub predictions: Arc<Mutex<NnPredictions>>,
     pub pause_flag: Arc<AtomicBool>,
     pub compute_stats: Arc<Mutex<ComputeStats>>,
 }
@@ -38,7 +38,7 @@ impl TrainingProgress {
         Self {
             status: Arc::new(Mutex::new(TrainingStatus::Idle)),
             losses: Arc::new(Mutex::new(Vec::new())),
-            predictions: Arc::new(Mutex::new(Vec::new())),
+            predictions: Arc::new(Mutex::new(NnPredictions::default())),
             pause_flag: Arc::new(AtomicBool::new(false)),
             compute_stats: Arc::new(Mutex::new(ComputeStats::default())),
         }
@@ -346,7 +346,7 @@ fn mse_loss<B: AutodiffBackend>(
 pub fn run_inference(
     model: &crate::nn::model::VolPredictionModel<burn::backend::NdArray>,
     market_data: &MarketData,
-) -> Vec<(String, f64)> {
+) -> NnPredictions {
     let device = <burn::backend::NdArray as burn::tensor::backend::Backend>::Device::default();
     run_inference_impl(model, market_data, &device)
 }
@@ -355,7 +355,7 @@ fn run_inference_impl<B: burn::tensor::backend::Backend>(
     model: &crate::nn::model::VolPredictionModel<B>,
     market_data: &MarketData,
     device: &B::Device,
-) -> Vec<(String, f64)> {
+) -> NnPredictions {
     let dataset = build_dataset(market_data, config::NN_LOOKBACK_DAYS, config::NN_FORWARD_DAYS);
 
     if let Some(last_sample) = dataset.samples.last() {
@@ -374,16 +374,39 @@ fn run_inference_impl<B: burn::tensor::backend::Backend>(
 
         let pred = model.forward(input);
         let pred_val = pred.into_data().to_vec::<f32>().unwrap_or_default();
-        let predicted_vol = pred_val.first().copied().unwrap_or(0.0) as f64;
 
-        return market_data
+        let predicted_vol = pred_val.get(0).copied().unwrap_or(0.0) as f64;
+        let vol: Vec<(String, f64)> = market_data
             .sectors
             .iter()
             .map(|s| (s.symbol.clone(), predicted_vol))
             .collect();
+
+        let randomness: Vec<(String, f64)> = market_data
+            .sectors
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let entropy = pred_val.get(1 + i).copied().unwrap_or(0.0) as f64;
+                (s.symbol.clone(), entropy)
+            })
+            .collect();
+
+        let mut kurtosis = Vec::with_capacity(market_data.sectors.len());
+        for (i, s) in market_data.sectors.iter().enumerate() {
+            let k = pred_val.get(12 + i * 2).copied().unwrap_or(0.0) as f64;
+            let sk = pred_val.get(12 + i * 2 + 1).copied().unwrap_or(0.0) as f64;
+            kurtosis.push((s.symbol.clone(), k, sk));
+        }
+
+        return NnPredictions {
+            vol,
+            randomness,
+            kurtosis,
+        };
     }
 
-    vec![]
+    NnPredictions::default()
 }
 
 /// Generate predictions for each sector using the trained model

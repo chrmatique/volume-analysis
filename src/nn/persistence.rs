@@ -17,8 +17,9 @@ pub struct ModelMetadata {
     pub epochs: usize,
 }
 
-const MODEL_FILENAME: &str = "vol_model";
-const METADATA_FILENAME: &str = "vol_model_metadata";
+// v2: multi-output model (vol + randomness + kurtosis); incompatible with v1
+const MODEL_FILENAME: &str = "vol_model_v2";
+const METADATA_FILENAME: &str = "vol_model_v2_metadata";
 
 /// Save the trained model to disk in gzip-compressed MessagePack format.
 pub fn save_model<B: burn::tensor::backend::Backend>(

@@ -270,79 +270,106 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
     ui.add_space(8.0);
 
-    // Predictions: three columns left-to-right (Vol | Randomness | Kurtosis)
+    // Predictions: only show columns for enabled feature flags (Vol | Randomness | Kurtosis)
     if !state.nn_predictions.is_empty() {
+        let flags = state.nn_feature_flags.clone();
+        let show_vol = flags.sector_volatility;
+        let show_rand = flags.market_randomness;
+        let show_kurt = flags.kurtosis;
+        let col_count = [show_vol, show_rand, show_kurt]
+            .iter()
+            .filter(|&&v| v)
+            .count();
+
         ui.heading("5-Day Forward Predictions");
         ui.add_space(4.0);
 
-        ui.columns(3, |cols| {
-            // Column 1: Vol
-            cols[0].group(|ui| {
-                ui.strong("Volatility");
-                ui.add_space(4.0);
-                egui::Grid::new("pred_vol_grid")
-                    .striped(true)
-                    .min_col_width(80.0)
-                    .show(ui, |ui| {
-                        ui.strong("Sector");
-                        ui.strong("Vol (%)");
-                        ui.end_row();
-                        for (sector, vol) in &state.nn_predictions.vol {
-                            ui.label(sector);
-                            let vol_pct = vol * 100.0;
-                            let color = if vol_pct > 30.0 {
-                                egui::Color32::from_rgb(220, 50, 50)
-                            } else if vol_pct > 20.0 {
-                                egui::Color32::from_rgb(220, 150, 50)
-                            } else {
-                                egui::Color32::from_rgb(50, 180, 50)
-                            };
-                            ui.colored_label(color, format!("{:.2}%", vol_pct));
-                            ui.end_row();
-                        }
-                    });
-            });
+        if col_count == 0 {
+            ui.label("All feature groups are disabled. Enable at least one feature in Settings to see predictions.");
+        } else {
+            // Build ordered list of enabled column renderers so the column indices stay contiguous.
+            // We use a nested columns call whose count matches the number of active flags.
+            let vol_data: Vec<_> = state.nn_predictions.vol.clone();
+            let rand_data: Vec<_> = state.nn_predictions.randomness.clone();
+            let kurt_data: Vec<_> = state.nn_predictions.kurtosis.clone();
 
-            // Column 2: Randomness (entropy)
-            cols[1].group(|ui| {
-                ui.strong("Randomness");
-                ui.add_space(4.0);
-                egui::Grid::new("pred_randomness_grid")
-                    .striped(true)
-                    .min_col_width(80.0)
-                    .show(ui, |ui| {
-                        ui.strong("Sector");
-                        ui.strong("Entropy");
-                        ui.end_row();
-                        for (sector, entropy) in &state.nn_predictions.randomness {
-                            ui.label(sector);
-                            ui.label(format!("{:.3}", entropy));
-                            ui.end_row();
-                        }
-                    });
-            });
+            ui.columns(col_count, |cols| {
+                let mut col_idx = 0;
 
-            // Column 3: Kurtosis
-            cols[2].group(|ui| {
-                ui.strong("Kurtosis");
-                ui.add_space(4.0);
-                egui::Grid::new("pred_kurtosis_grid")
-                    .striped(true)
-                    .min_col_width(70.0)
-                    .show(ui, |ui| {
-                        ui.strong("Sector");
-                        ui.strong("Kurt");
-                        ui.strong("Skew");
-                        ui.end_row();
-                        for (sector, k, s) in &state.nn_predictions.kurtosis {
-                            ui.label(sector);
-                            ui.label(format!("{:.2}", k));
-                            ui.label(format!("{:.2}", s));
-                            ui.end_row();
-                        }
+                if show_vol {
+                    cols[col_idx].group(|ui| {
+                        ui.strong("Volatility");
+                        ui.add_space(4.0);
+                        egui::Grid::new("pred_vol_grid")
+                            .striped(true)
+                            .min_col_width(80.0)
+                            .show(ui, |ui| {
+                                ui.strong("Sector");
+                                ui.strong("Vol (%)");
+                                ui.end_row();
+                                for (sector, vol) in &vol_data {
+                                    ui.label(sector);
+                                    let vol_pct = vol * 100.0;
+                                    let color = if vol_pct > 30.0 {
+                                        egui::Color32::from_rgb(220, 50, 50)
+                                    } else if vol_pct > 20.0 {
+                                        egui::Color32::from_rgb(220, 150, 50)
+                                    } else {
+                                        egui::Color32::from_rgb(50, 180, 50)
+                                    };
+                                    ui.colored_label(color, format!("{:.2}%", vol_pct));
+                                    ui.end_row();
+                                }
+                            });
                     });
+                    col_idx += 1;
+                }
+
+                if show_rand {
+                    cols[col_idx].group(|ui| {
+                        ui.strong("Randomness");
+                        ui.add_space(4.0);
+                        egui::Grid::new("pred_randomness_grid")
+                            .striped(true)
+                            .min_col_width(80.0)
+                            .show(ui, |ui| {
+                                ui.strong("Sector");
+                                ui.strong("Entropy");
+                                ui.end_row();
+                                for (sector, entropy) in &rand_data {
+                                    ui.label(sector);
+                                    ui.label(format!("{:.3}", entropy));
+                                    ui.end_row();
+                                }
+                            });
+                    });
+                    col_idx += 1;
+                }
+
+                if show_kurt {
+                    cols[col_idx].group(|ui| {
+                        ui.strong("Kurtosis");
+                        ui.add_space(4.0);
+                        egui::Grid::new("pred_kurtosis_grid")
+                            .striped(true)
+                            .min_col_width(70.0)
+                            .show(ui, |ui| {
+                                ui.strong("Sector");
+                                ui.strong("Kurt");
+                                ui.strong("Skew");
+                                ui.end_row();
+                                for (sector, k, s) in &kurt_data {
+                                    ui.label(sector);
+                                    ui.label(format!("{:.2}", k));
+                                    ui.label(format!("{:.2}", s));
+                                    ui.end_row();
+                                }
+                            });
+                    });
+                    let _ = col_idx + 1; // suppress unused warning
+                }
             });
-        });
+        }
     } else if matches!(state.training_status, TrainingStatus::Idle) {
         ui.add_space(8.0);
         ui.label("No predictions yet. Train the model to generate predictions.");

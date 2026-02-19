@@ -59,26 +59,38 @@ impl TrainingProgress {
 
 /// Run the full training pipeline, selecting GPU or CPU backend.
 pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: bool) {
-    // Detect GPU via nvidia-smi
-    let gpu_info = crate::nn::gpu::detect_nvidia_gpu();
+    // Prefer vendor-specific stats (NVIDIA via nvidia-smi, AMD via rocm-smi/amd-smi)
+    let gpu_stats = crate::nn::gpu::poll_gpu_stats();
+    let adapter_name = crate::nn::gpu::detect_wgpu_adapters()
+        .into_iter()
+        .next()
+        .map(|a| a.name);
 
-    // Populate initial GPU detection info
+    // Populate initial GPU detection info from stats or adapter name
     if let Ok(mut stats) = progress.compute_stats.lock() {
-        if let Some(ref info) = gpu_info {
+        if use_gpu {
             stats.gpu_detected = true;
-            stats.gpu_name = Some(info.name.clone());
-            stats.gpu_vram_total_mb = Some(info.vram_total_mb);
-            stats.gpu_vram_used_mb = Some(info.vram_used_mb);
-            stats.gpu_utilization_percent = Some(info.utilization_percent);
-            stats.gpu_temperature_c = Some(info.temperature_c);
+            stats.gpu_name = gpu_stats
+                .as_ref()
+                .map(|i| i.name.clone())
+                .or(adapter_name.clone());
+            if let Some(ref info) = gpu_stats {
+                stats.gpu_vram_total_mb = Some(info.vram_total_mb);
+                stats.gpu_vram_used_mb = Some(info.vram_used_mb);
+                stats.gpu_utilization_percent = Some(info.utilization_percent);
+                stats.gpu_temperature_c = Some(info.temperature_c);
+            }
         }
     }
 
     if use_gpu {
-        // Set backend name
         let backend_label = format!(
             "WGPU GPU: {}",
-            gpu_info.as_ref().map(|i| i.name.as_str()).unwrap_or("Default")
+            gpu_stats
+                .as_ref()
+                .map(|i| i.name.as_str())
+                .or(adapter_name.as_deref())
+                .unwrap_or("Default")
         );
         if let Ok(mut stats) = progress.compute_stats.lock() {
             stats.backend_name = backend_label;
@@ -205,8 +217,16 @@ fn train_impl<B: AutodiffBackend>(
         let mut samples_this_epoch = 0_usize;
 
         for batch in dataloader.iter() {
-            // Check pause mid-epoch too
+            // Check pause mid-epoch too; set Paused so UI updates
             while progress.is_paused() {
+                set_status(progress, TrainingStatus::Paused {
+                    epoch,
+                    total_epochs: config::NN_EPOCHS,
+                    loss: progress.losses.lock()
+                        .ok()
+                        .and_then(|l| l.last().copied())
+                        .unwrap_or(f64::NAN),
+                });
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
 

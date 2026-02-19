@@ -6,8 +6,8 @@ use crate::analysis;
 use crate::config;
 use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
-    BondSpread, ComputeStats, CorrelationMatrix, KurtosisMetrics, MarketData, TrainingStatus,
-    VolatilityMetrics,
+    BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo, KurtosisMetrics, MarketData,
+    TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
@@ -112,6 +112,8 @@ pub struct AppState {
     pub model_metadata: Option<ModelMetadata>,
     /// Feedback message from the last model save/load attempt, shown in the Neural Net tab
     pub persistence_message: Option<String>,
+    /// WGPU-capable adapters (NVIDIA, AMD, Intel) detected at startup
+    pub available_gpus: Vec<GpuAdapterInfo>,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
 }
@@ -126,6 +128,9 @@ impl Default for AppState {
             None => (None, None),
         };
 
+        let available_gpus = crate::nn::gpu::detect_wgpu_adapters();
+        let use_gpu = !available_gpus.is_empty();
+
         Self {
             active_tab: Tab::Dashboard,
             market_data: MarketData::default(),
@@ -137,13 +142,14 @@ impl Default for AppState {
             training_losses: vec![],
             nn_predictions: vec![],
             compute_stats: ComputeStats::default(),
-            use_gpu: true,
+            use_gpu,
             training_progress: None,
             plot_3d: Plot3DState::default(),
             chart_heights: ChartHeights::default(),
             loaded_model,
             model_metadata,
             persistence_message: None,
+            available_gpus,
             data_receiver: None,
         }
     }
@@ -324,6 +330,10 @@ impl MktNoiseApp {
             let n_sectors = data.sectors.len();
             let n_rates = data.treasury_rates.len();
             self.state.market_data = data;
+            self.state.available_gpus = crate::nn::gpu::detect_wgpu_adapters();
+            if self.state.available_gpus.is_empty() {
+                self.state.use_gpu = false;
+            }
             self.state.recompute_analysis();
             self.state.is_loading = false;
             self.state.status_message = format!(

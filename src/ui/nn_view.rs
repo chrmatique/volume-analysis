@@ -71,41 +71,25 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     if !is_training {
         ui.horizontal(|ui| {
             ui.label("Training Device:");
-            ui.selectable_value(&mut state.use_gpu, true, "GPU (WGPU)");
-            ui.selectable_value(&mut state.use_gpu, false, "CPU (NdArray)");
 
-            // Show quick GPU detection status
-            if state.compute_stats.gpu_detected {
+            if !state.available_gpus.is_empty() {
+                let gpu_label = format!(
+                    "GPU ({})",
+                    state.available_gpus.first().map(|a| a.name.as_str()).unwrap_or("WGPU")
+                );
+                ui.selectable_value(&mut state.use_gpu, true, gpu_label);
+                ui.selectable_value(&mut state.use_gpu, false, "CPU (NdArray)");
                 ui.colored_label(
                     egui::Color32::from_rgb(50, 180, 50),
-                    format!(
-                        "  Detected: {}",
-                        state
-                            .compute_stats
-                            .gpu_name
-                            .as_deref()
-                            .unwrap_or("Unknown GPU")
-                    ),
+                    format!("  Detected: {}", state.available_gpus[0].name),
                 );
             } else {
-                // Run a quick detection on first render
-                if !state.compute_stats.gpu_detected && state.compute_stats.gpu_name.is_none() {
-                    if let Some(info) = crate::nn::gpu::detect_nvidia_gpu() {
-                        state.compute_stats.gpu_detected = true;
-                        state.compute_stats.gpu_name = Some(info.name);
-                        state.compute_stats.gpu_vram_total_mb = Some(info.vram_total_mb);
-                    } else {
-                        // Mark as checked but not found
-                        state.compute_stats.gpu_name = Some("None".to_string());
-                    }
-                }
-
-                if state.compute_stats.gpu_name.as_deref() == Some("None") {
-                    ui.colored_label(
-                        egui::Color32::from_rgb(220, 100, 50),
-                        "  No NVIDIA GPU detected (nvidia-smi not found)",
-                    );
-                }
+                ui.selectable_value(&mut state.use_gpu, false, "CPU (NdArray)");
+                state.use_gpu = false;
+                ui.colored_label(
+                    egui::Color32::from_rgb(220, 100, 50),
+                    "  No GPU detected (WGPU found no adapters)",
+                );
             }
         });
         ui.add_space(4.0);
@@ -535,6 +519,19 @@ fn render_compute_stats(
                                 egui::Color32::from_rgb(50, 180, 50)
                             };
                             ui.colored_label(temp_color, format!("{:.0} C", temp));
+                            ui.end_row();
+                        }
+
+                        // When on GPU but no vendor stats available (e.g. AMD without amd-smi)
+                        if stats.using_gpu
+                            && stats.gpu_vram_total_mb.is_none()
+                            && stats.gpu_utilization_percent.is_none()
+                        {
+                            ui.label("Stats:");
+                            ui.colored_label(
+                                egui::Color32::from_gray(150),
+                                "Unavailable (nvidia-smi / rocm-smi / amd-smi not found)",
+                            );
                             ui.end_row();
                         }
                     });

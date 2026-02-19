@@ -148,6 +148,15 @@ pub enum TrainingStatus {
     Error(String),
 }
 
+/// Wgpu adapter info for vendor-agnostic GPU detection (NVIDIA, AMD, Intel).
+#[derive(Debug, Clone)]
+pub struct GpuAdapterInfo {
+    pub name: String,
+    pub backend: String,  // "Vulkan" | "Dx12" | "Metal"
+    pub is_nvidia: bool,
+    pub is_amd: bool,
+}
+
 /// Compute/resource statistics collected during training
 #[derive(Debug, Clone, Default)]
 pub struct ComputeStats {

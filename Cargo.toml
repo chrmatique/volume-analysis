@@ -25,6 +25,7 @@ csv = "1"
 
 # Neural network
 burn = { version = "0.16", features = ["wgpu", "train", "ndarray"] }
+wgpu = "23"
 
 # 3D plotting
 plotters = "0.3"

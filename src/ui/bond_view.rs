@@ -34,7 +34,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 Plot::new("yield_curve")
                     .height(state.chart_heights.bond_yield_curve)
                     .allow_drag(true)
-                    .allow_zoom(true)
+                    .allow_scroll(false)
+                    .allow_zoom(false)
                     .y_axis_label("Yield (%)")
                     .show(ui, |plot_ui| {
                         plot_ui.bar_chart(
@@ -78,7 +79,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         Plot::new("term_spread_plot")
             .height(state.chart_heights.bond_term_spread)
             .allow_drag(true)
-            .allow_zoom(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
             .x_axis_label("Trading Day (recent -> past)")
             .y_axis_label("Spread (percentage points)")
             .legend(egui_plot::Legend::default())
@@ -114,7 +116,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         Plot::new("curve_slope_plot")
             .height(state.chart_heights.bond_curve_slope)
             .allow_drag(true)
-            .allow_zoom(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
             .x_axis_label("Trading Day (recent -> past)")
             .y_axis_label("Slope (percentage points)")
             .show(ui, |plot_ui| {

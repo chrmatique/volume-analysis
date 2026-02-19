@@ -271,7 +271,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         Plot::new("loss_plot")
             .height(state.chart_heights.nn_loss)
             .allow_drag(true)
-            .allow_zoom(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
             .x_axis_label("Epoch")
             .y_axis_label("MSE Loss")
             .show(ui, |plot_ui| {

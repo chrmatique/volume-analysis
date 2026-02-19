@@ -99,7 +99,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         Plot::new("distribution_plot")
             .height(state.chart_heights.kurtosis_distribution)
             .allow_drag(true)
-            .allow_zoom(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
             .x_axis_label("Daily Log Return (%)")
             .y_axis_label("Density")
             .legend(egui_plot::Legend::default())
@@ -161,7 +162,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         Plot::new("rolling_kurtosis_plot")
             .height(state.chart_heights.kurtosis_rolling_kurtosis)
             .allow_drag(true)
-            .allow_zoom(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
             .x_axis_label("Trading Days")
             .y_axis_label("Excess Kurtosis")
             .legend(egui_plot::Legend::default())
@@ -218,7 +220,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         Plot::new("rolling_skewness_plot")
             .height(state.chart_heights.kurtosis_rolling_skewness)
             .allow_drag(true)
-            .allow_zoom(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
             .x_axis_label("Trading Days")
             .y_axis_label("Skewness")
             .legend(egui_plot::Legend::default())
@@ -231,7 +234,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 );
                 plot_ui.line(
                     Line::new(zero_line)
-                        .name("Symmetric (0)")
+                        .name("Symmetricity (0)")
                         .color(egui::Color32::from_rgb(150, 150, 150))
                         .style(egui_plot::LineStyle::dashed_loose()),
                 );

@@ -74,6 +74,7 @@ pub struct ChartHeights {
     pub kurtosis_rolling_kurtosis: f32,
     pub kurtosis_rolling_skewness: f32,
     pub kurtosis_accel_chart: f32,
+    pub put_call_skew: f32,
 }
 
 impl Default for ChartHeights {
@@ -90,6 +91,7 @@ impl Default for ChartHeights {
             kurtosis_rolling_kurtosis: 200.0,
             kurtosis_rolling_skewness: 200.0,
             kurtosis_accel_chart: 220.0,
+            put_call_skew: 200.0,
         }
     }
 }
@@ -423,6 +425,16 @@ impl MktNoiseApp {
             match crate::data::fmp::fetch_sector_performance(&config::fmp_api_key()).await {
                 Ok(perf) => market_data.sector_performance = perf,
                 Err(e) => tracing::warn!("Failed to fetch sector performance: {}", e),
+            }
+
+            // Fetch CBOE put/call ratio and SKEW
+            match crate::data::cboe::fetch_put_call_ratio().await {
+                Ok(records) => market_data.put_call_ratio = records,
+                Err(e) => tracing::warn!("Failed to fetch CBOE put/call ratio: {:?}", e),
+            }
+            match crate::data::cboe::fetch_skew_history().await {
+                Ok(records) => market_data.skew_history = records,
+                Err(e) => tracing::warn!("Failed to fetch CBOE SKEW: {:?}", e),
             }
 
             market_data.last_refresh = Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());

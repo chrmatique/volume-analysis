@@ -1,6 +1,8 @@
 use eframe::egui;
+use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::app::AppState;
+use crate::ui::chart_utils::height_control;
 use crate::config;
 
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
@@ -124,6 +126,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             }
         });
 
+    // Put/Call Ratio & SKEW
+    render_put_call_skew_section(ui, state);
+
     // FMP sector performance
     if !state.market_data.sector_performance.is_empty() {
         ui.add_space(16.0);
@@ -150,6 +155,83 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     ui.colored_label(color, format!("{:+.2}%", sp.changes_percentage));
                     ui.end_row();
                 }
+            });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Put/Call Ratio & SKEW section
+// ---------------------------------------------------------------------------
+
+fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
+    let has_pc = !state.market_data.put_call_ratio.is_empty();
+    let has_skew = !state.market_data.skew_history.is_empty();
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+    ui.heading("Put/Call Ratio & SKEW");
+    ui.add_space(4.0);
+
+    if !has_pc && !has_skew {
+        ui.label("No Put/Call or SKEW data. Data is fetched with Refresh Data.");
+        return;
+    }
+
+    if has_pc {
+        let pc_points: PlotPoints = state
+            .market_data
+            .put_call_ratio
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(i, r)| [i as f64, r.pc_ratio])
+            .collect();
+
+        height_control(ui, &mut state.chart_heights.put_call_skew, "P/C Ratio & SKEW Chart Height");
+        Plot::new("put_call_ratio_plot")
+            .height(state.chart_heights.put_call_skew)
+            .allow_drag(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
+            .x_axis_label("Trading Day (recent -> past)")
+            .y_axis_label("P/C Ratio")
+            .legend(egui_plot::Legend::default())
+            .show(ui, |plot_ui| {
+                plot_ui.line(
+                    Line::new(pc_points)
+                        .name("Total P/C Ratio")
+                        .color(egui::Color32::from_rgb(255, 150, 50)),
+                );
+            });
+
+        ui.add_space(8.0);
+    }
+
+    if has_skew {
+        let skew_points: PlotPoints = state
+            .market_data
+            .skew_history
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(i, r)| [i as f64, r.skew])
+            .collect();
+
+        Plot::new("skew_plot")
+            .height(state.chart_heights.put_call_skew)
+            .allow_drag(true)
+            .allow_scroll(false)
+            .allow_zoom(false)
+            .x_axis_label("Trading Day (recent -> past)")
+            .y_axis_label("SKEW")
+            .legend(egui_plot::Legend::default())
+            .show(ui, |plot_ui| {
+                plot_ui.line(
+                    Line::new(skew_points)
+                        .name("CBOE SKEW")
+                        .color(egui::Color32::from_rgb(70, 180, 220)),
+                );
             });
     }
 }

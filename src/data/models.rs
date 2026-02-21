@@ -82,6 +82,20 @@ impl TreasuryRate {
     }
 }
 
+/// Put/Call ratio record from CBOE totalpc.csv
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PutCallRecord {
+    pub date: NaiveDate,
+    pub pc_ratio: f64,
+}
+
+/// CBOE SKEW index record from SKEW_History.csv
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkewRecord {
+    pub date: NaiveDate,
+    pub skew: f64,
+}
+
 /// Computed bond spread for a given date
 #[derive(Debug, Clone)]
 pub struct BondSpread {
@@ -273,5 +287,7 @@ pub struct MarketData {
     pub benchmark: Option<SectorTimeSeries>,
     pub treasury_rates: Vec<TreasuryRate>,
     pub sector_performance: Vec<SectorPerformance>,
+    pub put_call_ratio: Vec<PutCallRecord>,
+    pub skew_history: Vec<SkewRecord>,
     pub last_refresh: Option<String>,
 }

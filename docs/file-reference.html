@@ -45,16 +45,16 @@
     </thead>
     <tbody>
       <tr><td class="path">src/main.rs</td><td>Binary entry; eframe setup, tab routing</td></tr>
-      <tr><td class="path">src/app.rs</td><td>MktNoiseApp, AppState, analysis orchestration, async data fetch</td></tr>
+      <tr><td class="path">src/app.rs</td><td>MktNoiseApp, AppState, analysis orchestration, async data fetch; corr_lookback, recompute_correlation()</td></tr>
       <tr><td class="path">src/config.rs</td><td>Sector ETFs, windows, NN params, .env loading</td></tr>
       <tr><td class="path">src/data/mod.rs</td><td>data crate module</td></tr>
       <tr><td class="path">src/data/cache.rs</td><td>Yahoo/FMP response caching</td></tr>
       <tr><td class="path">src/data/fmp.rs</td><td>FMP API: treasury rates, sector performance</td></tr>
-      <tr><td class="path">src/data/models.rs</td><td>MarketData, VolatilityMetrics, BondSpread, CorrelationMatrix, etc.</td></tr>
+      <tr><td class="path">src/data/models.rs</td><td>MarketData, VolatilityMetrics, BondSpread, CorrelationMatrix, PcaResult, etc.</td></tr>
       <tr><td class="path">src/data/yahoo.rs</td><td>Yahoo Finance OHLCV and sector ETF fetching</td></tr>
       <tr><td class="path">src/analysis/mod.rs</td><td>analysis module</td></tr>
       <tr><td class="path">src/analysis/bond_spreads.rs</td><td>Term spread, yield curve, inversion detection</td></tr>
-      <tr><td class="path">src/analysis/cross_sector.rs</td><td>Correlation matrix, cross-sector correlation</td></tr>
+      <tr><td class="path">src/analysis/cross_sector.rs</td><td>Correlation matrix, Jacobi eigendecomposition, PCA, Marchenko-Pastur bound, windowed correlation</td></tr>
       <tr><td class="path">src/analysis/kurtosis.rs</td><td>Kurtosis, skewness, Jarque-Bera, KDE density</td></tr>
       <tr><td class="path">src/analysis/randomness.rs</td><td>Sector randomness / entropy metrics</td></tr>
       <tr><td class="path">src/analysis/volatility.rs</td><td>Sector volatility (short/long windows, Parkinson)</td></tr>
@@ -67,7 +67,7 @@
       <tr><td class="path">src/ui/mod.rs</td><td>ui module</td></tr>
       <tr><td class="path">src/ui/bond_view.rs</td><td>Bonds tab: yield curve, term spread, curve slope</td></tr>
       <tr><td class="path">src/ui/chart_utils.rs</td><td>Shared chart helpers (height_control)</td></tr>
-      <tr><td class="path">src/ui/correlation_view.rs</td><td>Correlations tab: matrix grid</td></tr>
+      <tr><td class="path">src/ui/correlation_view.rs</td><td>Correlations tab: lookback selector (30/60/90d), correlation matrix grid, PCA loadings heatmap, Marchenko-Pastur noise indicators</td></tr>
       <tr><td class="path">src/ui/dashboard.rs</td><td>Dashboard: 3D probability distribution plot</td></tr>
       <tr><td class="path">src/ui/kurtosis_view.rs</td><td>Kurtosis tab: distribution, rolling kurtosis/skewness</td></tr>
       <tr><td class="path">src/ui/nn_view.rs</td><td>Neural Net tab: training UI, predictions</td></tr>

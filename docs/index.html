@@ -259,6 +259,7 @@ flowchart TB
         <ul>
           <li>MktNoiseApp, Tab enum, AppState</li>
           <li>ChartHeights, Plot3DState, TrainingStatus</li>
+          <li>corr_lookback (30/60/90d), recompute_correlation()</li>
         </ul>
       </div>
       <div class="card">
@@ -275,15 +276,15 @@ flowchart TB
         <ul>
           <li>yahoo.rs — OHLCV, sector ETFs</li>
           <li>fmp.rs — treasury rates, sector performance</li>
-          <li>models.rs — MarketData, VolatilityMetrics, BondSpread, etc.</li>
+          <li>models.rs — MarketData, VolatilityMetrics, BondSpread, CorrelationMatrix, PcaResult, etc.</li>
         </ul>
       </div>
       <div class="card">
         <h3>analysis</h3>
-        <p>Volatility, correlation, bond spreads, kurtosis, randomness.</p>
+        <p>Volatility, correlation, PCA, bond spreads, kurtosis, randomness.</p>
         <ul>
           <li>volatility.rs — short/long rolling vol</li>
-          <li>cross_sector.rs — correlation matrix</li>
+          <li>cross_sector.rs — correlation matrix, Jacobi PCA, Marchenko-Pastur, windowed correlation</li>
           <li>bond_spreads.rs — 10Y-2Y, yield curve</li>
           <li>kurtosis.rs, randomness.rs</li>
         </ul>
@@ -303,6 +304,7 @@ flowchart TB
         <p>eframe/egui views: Dashboard, Sector Vol, Correlations, Bonds, Kurtosis, NN, Settings.</p>
         <ul>
           <li>dashboard.rs — 3D probability plot</li>
+          <li>correlation_view.rs — lookback selector, PC loadings heatmap, MP noise indicators</li>
           <li>sector_view, bond_view, kurtosis_view — charts</li>
           <li>nn_view — training UI, predictions</li>
           <li>chart_utils.rs — shared height_control</li>

@@ -7,7 +7,7 @@ use crate::config;
 use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
     BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo, KurtosisMetrics, MarketData,
-    NnFeatureFlags, NnPredictions, ScreenshotSettings, TrainingStatus, VolatilityMetrics,
+    NnFeatureFlags, NnPredictions, PcaResult, ScreenshotSettings, TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
@@ -31,6 +31,7 @@ pub enum Tab {
 pub struct AnalysisResults {
     pub volatility: Vec<VolatilityMetrics>,
     pub correlation: Option<CorrelationMatrix>,
+    pub pca: Option<PcaResult>,
     pub bond_spreads: Vec<BondSpread>,
     pub avg_cross_correlation: f64,
     pub kurtosis: Vec<KurtosisMetrics>,
@@ -129,6 +130,8 @@ pub struct AppState {
     pub folder_picker_result: Option<Arc<Mutex<Option<String>>>>,
     /// Rolling window size for kurtosis analysis (30 or 60 trading days)
     pub kurtosis_window: usize,
+    /// Lookback window (days) for windowed correlation + PCA (30 / 60 / 90)
+    pub corr_lookback: usize,
 }
 
 impl Default for AppState {
@@ -169,6 +172,7 @@ impl Default for AppState {
                 .unwrap_or_default(),
             folder_picker_result: None,
             kurtosis_window: 30,
+            corr_lookback: 90,
         }
     }
 }
@@ -211,6 +215,9 @@ impl AppState {
             .collect();
         let corr = analysis::cross_sector::compute_correlation_matrix(&symbols, &returns);
         let avg_corr = analysis::cross_sector::average_cross_correlation(&corr);
+        // Minimum observation count across all sectors (used for MP bound)
+        let t_obs = returns.iter().map(|r| r.len()).min().unwrap_or(0);
+        let pca = analysis::cross_sector::compute_pca(&symbols, &corr, t_obs);
 
         // Bond spreads
         let spreads = analysis::bond_spreads::compute_term_spreads(&self.market_data.treasury_rates);
@@ -248,6 +255,7 @@ impl AppState {
         self.analysis = AnalysisResults {
             volatility: vol_metrics,
             correlation: Some(corr),
+            pca: Some(pca),
             bond_spreads: spreads,
             avg_cross_correlation: avg_corr,
             kurtosis: kurtosis_metrics,
@@ -256,6 +264,40 @@ impl AppState {
 
         // Signal the 3D plot needs a redraw with new data
         self.plot_3d.needs_redraw = true;
+    }
+
+    /// Recompute only windowed correlation + PCA for the current `corr_lookback`.
+    /// Much faster than `recompute_analysis()` — avoids recalculating vol, bonds, kurtosis.
+    pub fn recompute_correlation(&mut self) {
+        let symbols: Vec<String> = self
+            .market_data
+            .sectors
+            .iter()
+            .map(|s| s.symbol.clone())
+            .collect();
+        let returns: Vec<Vec<f64>> = self
+            .market_data
+            .sectors
+            .iter()
+            .map(|s| s.log_returns())
+            .collect();
+
+        let corr = analysis::cross_sector::compute_correlation_matrix_windowed(
+            &symbols,
+            &returns,
+            self.corr_lookback,
+        );
+        let avg_corr = analysis::cross_sector::average_cross_correlation(&corr);
+        let t_obs = returns
+            .iter()
+            .map(|r| r.len().min(self.corr_lookback))
+            .min()
+            .unwrap_or(0);
+        let pca = analysis::cross_sector::compute_pca(&symbols, &corr, t_obs);
+
+        self.analysis.correlation = Some(corr);
+        self.analysis.avg_cross_correlation = avg_corr;
+        self.analysis.pca = Some(pca);
     }
 
     /// Recompute only kurtosis metrics using the current `kurtosis_window`.

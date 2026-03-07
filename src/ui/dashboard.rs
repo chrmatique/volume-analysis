@@ -187,7 +187,7 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
     }
 
     if has_pc {
-        let pc_points: PlotPoints = state
+        let pc_data: Vec<[f64; 2]> = state
             .market_data
             .put_call_ratio
             .iter()
@@ -195,6 +195,13 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
             .enumerate()
             .map(|(i, r)| [i as f64, r.pc_ratio])
             .collect();
+
+        let pc_series = [chart_utils::HoverSeries {
+            name: "Total P/C Ratio",
+            data: &pc_data,
+            decimals: 3,
+            suffix: "",
+        }];
 
         height_control(ui, &mut state.chart_heights.put_call_skew, "P/C Ratio & SKEW Chart Height");
         chart_utils::plot_with_y_drag(
@@ -206,10 +213,15 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
             )
                 .x_axis_label("Trading Day (recent -> past)")
                 .y_axis_label("P/C Ratio")
-                .legend(egui_plot::Legend::default()),
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(
+                    chart_utils::HOVER_CORNER,
+                    chart_utils::hover_formatter(&pc_series),
+                )
+                .label_formatter(chart_utils::no_hover_label),
             |plot_ui| {
                 plot_ui.line(
-                    Line::new(pc_points)
+                    Line::new(PlotPoints::from(pc_data.clone()))
                         .name("Total P/C Ratio")
                         .color(egui::Color32::from_rgb(255, 150, 50)),
                 );
@@ -220,7 +232,7 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
     }
 
     if has_skew {
-        let skew_points: PlotPoints = state
+        let skew_data: Vec<[f64; 2]> = state
             .market_data
             .skew_history
             .iter()
@@ -228,6 +240,13 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
             .enumerate()
             .map(|(i, r)| [i as f64, r.skew])
             .collect();
+
+        let skew_series = [chart_utils::HoverSeries {
+            name: "CBOE SKEW",
+            data: &skew_data,
+            decimals: 2,
+            suffix: "",
+        }];
 
         chart_utils::plot_with_y_drag(
             ui,
@@ -238,10 +257,15 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
             )
                 .x_axis_label("Trading Day (recent -> past)")
                 .y_axis_label("SKEW")
-                .legend(egui_plot::Legend::default()),
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(
+                    chart_utils::HOVER_CORNER,
+                    chart_utils::hover_formatter(&skew_series),
+                )
+                .label_formatter(chart_utils::no_hover_label),
             |plot_ui| {
                 plot_ui.line(
-                    Line::new(skew_points)
+                    Line::new(PlotPoints::from(skew_data.clone()))
                         .name("CBOE SKEW")
                         .color(egui::Color32::from_rgb(70, 180, 220)),
                 );

@@ -182,6 +182,18 @@ pub struct CorrelationMatrix {
     pub matrix: Vec<Vec<f64>>,
 }
 
+/// PCA decomposition of a correlation matrix
+#[derive(Debug, Clone)]
+pub struct PcaResult {
+    /// Eigenvalues in descending order
+    pub eigenvalues: Vec<f64>,
+    /// Eigenvectors indexed as [pc_idx][sector_idx]
+    pub eigenvectors: Vec<Vec<f64>>,
+    pub symbols: Vec<String>,
+    /// Marchenko-Pastur upper noise boundary: (1 + sqrt(N/T))^2
+    pub mp_upper: f64,
+}
+
 /// Neural network training status
 #[derive(Debug, Clone)]
 pub enum TrainingStatus {

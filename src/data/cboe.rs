@@ -9,7 +9,7 @@ const TOTALPC_URL: &str =
     "https://cdn.cboe.com/resources/options/volume_and_call_put_ratios/totalpc.csv";
 const SKEW_URL: &str =
     "https://cdn.cboe.com/api/global/us_indices/daily_prices/SKEW_History.csv";
-const CACHE_AGE_HOURS: u64 = 12;
+const CACHE_AGE_HOURS: u64 = 6;
 
 /// Parse date from various formats (YYYY-MM-DD, M/D/YYYY, etc.)
 fn parse_date(s: &str) -> Option<NaiveDate> {

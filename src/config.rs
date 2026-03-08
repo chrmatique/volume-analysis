@@ -44,6 +44,41 @@ pub fn load_env() {
     }
 }
 
+/// Update or insert `key=value` in the `.env` file on disk.
+///
+/// Existing lines for `key` are replaced in-place. All other lines are
+/// preserved. The file is created if it does not yet exist.
+pub fn save_env_file(key: &str, value: &str) -> Result<(), String> {
+    let path = std::path::Path::new(".env");
+    let existing = if path.exists() {
+        std::fs::read_to_string(path).map_err(|e| format!("Failed to read .env: {e}"))?
+    } else {
+        String::new()
+    };
+
+    let mut found = false;
+    let mut lines: Vec<String> = existing
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            if let Some((k, _)) = trimmed.split_once('=') {
+                if k.trim() == key {
+                    found = true;
+                    return format!("{key}={value}");
+                }
+            }
+            line.to_string()
+        })
+        .collect();
+
+    if !found {
+        lines.push(format!("{key}={value}"));
+    }
+
+    let contents = lines.join("\n") + "\n";
+    std::fs::write(path, contents).map_err(|e| format!("Failed to write .env: {e}"))
+}
+
 /// Default historical lookback in calendar days (~2 years)
 pub const DEFAULT_LOOKBACK_DAYS: u32 = 730;
 

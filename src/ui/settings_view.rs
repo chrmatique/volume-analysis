@@ -11,11 +11,83 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
     let mut prev_visible = false;
 
-    // Screenshot settings section (above NN Training)
+    // API Keys section (topmost)
+    render_api_keys_section(ui, state, &mut prev_visible);
+
+    // Screenshot settings section
     render_screenshot_section(ui, state, &mut prev_visible);
 
     // NN Training Settings section
     render_nn_training_section(ui, state, &mut prev_visible);
+}
+
+fn render_api_keys_section(
+    ui: &mut egui::Ui,
+    state: &mut AppState,
+    prev_visible: &mut bool,
+) {
+    if *prev_visible {
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(8.0);
+    }
+
+    ui.heading("API Keys");
+    ui.add_space(4.0);
+
+    ui.group(|ui| {
+        // Per-widget reveal toggle stored in egui's memory so it persists across frames
+        let reveal_id = ui.id().with("fmp_key_reveal");
+        let mut reveal: bool = ui.memory(|m| m.data.get_temp(reveal_id).unwrap_or(false));
+
+        egui::Grid::new("api_keys_grid")
+            .num_columns(2)
+            .spacing(egui::vec2(12.0, 6.0))
+            .show(ui, |ui| {
+                ui.label("FMP API Key:");
+                ui.horizontal(|ui| {
+                    let text_edit = egui::TextEdit::singleline(&mut state.fmp_api_key)
+                        .desired_width(260.0)
+                        .password(!reveal);
+                    ui.add(text_edit);
+
+                    let eye_label = if reveal { "🙈 Hide" } else { "👁 Show" };
+                    if ui.button(eye_label).clicked() {
+                        reveal = !reveal;
+                    }
+                });
+                ui.end_row();
+            });
+
+        ui.memory_mut(|m| m.data.insert_temp(reveal_id, reveal));
+
+        ui.add_space(8.0);
+
+        if ui.button("Save").clicked() {
+            // Update the process environment so the next fetch picks it up
+            unsafe { std::env::set_var("FMP_API_KEY", &state.fmp_api_key); }
+
+            // Persist to .env on disk
+            match crate::config::save_env_file("FMP_API_KEY", &state.fmp_api_key) {
+                Ok(_) => {
+                    // Clear cached FMP files so the next refresh fetches fresh data
+                    let _ = std::fs::remove_file("fmp_treasury_rates.json");
+                    let _ = std::fs::remove_file("fmp_sector_performance.json");
+                    state.status_message =
+                        "FMP API key saved. Click 'Refresh Data' to fetch with the new key."
+                            .to_string();
+                }
+                Err(e) => {
+                    state.status_message = format!("Failed to save FMP API key: {e}");
+                }
+            }
+        }
+
+        ui.add_space(4.0);
+        ui.label("Key is used for Treasury rates and Sector performance data. Click 'Refresh Data' after saving to fetch with the new key.");
+    });
+
+    *prev_visible = true;
 }
 
 fn render_screenshot_section(

@@ -132,6 +132,8 @@ pub struct AppState {
     pub kurtosis_window: usize,
     /// Lookback window (days) for windowed correlation + PCA (30 / 60 / 90)
     pub corr_lookback: usize,
+    /// FMP API key — editable at runtime via the Settings tab
+    pub fmp_api_key: String,
 }
 
 impl Default for AppState {
@@ -173,6 +175,7 @@ impl Default for AppState {
             folder_picker_result: None,
             kurtosis_window: 30,
             corr_lookback: 90,
+            fmp_api_key: config::fmp_api_key(),
         }
     }
 }
@@ -426,6 +429,7 @@ impl MktNoiseApp {
         let result_slot: Arc<Mutex<Option<MarketData>>> = Arc::new(Mutex::new(None));
         self.state.data_receiver = Some(result_slot.clone());
 
+        let fmp_key = self.state.fmp_api_key.clone();
         self.tokio_rt.spawn(async move {
             let mut market_data = MarketData::default();
 
@@ -456,13 +460,13 @@ impl MktNoiseApp {
             }
 
             // Fetch treasury rates
-            match crate::data::fmp::fetch_treasury_rates(&config::fmp_api_key()).await {
+            match crate::data::fmp::fetch_treasury_rates(&fmp_key).await {
                 Ok(rates) => market_data.treasury_rates = rates,
                 Err(e) => tracing::warn!("Failed to fetch treasury rates: {:?}", e),
             }
 
             // Fetch sector performance
-            match crate::data::fmp::fetch_sector_performance(&config::fmp_api_key()).await {
+            match crate::data::fmp::fetch_sector_performance(&fmp_key).await {
                 Ok(perf) => market_data.sector_performance = perf,
                 Err(e) => tracing::warn!("Failed to fetch sector performance: {}", e),
             }

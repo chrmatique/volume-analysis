@@ -187,6 +187,65 @@ pub fn plot_with_y_drag<S: std::hash::Hash>(
     ui.data_mut(|d| d.insert_temp(state_id, new_state));
 }
 
+/// Drop-in replacement for `Plot::show()` that adds both click-and-drag
+/// Y-axis scaling **and** mousewheel-driven X-axis zoom anchored at the
+/// pointer position.
+///
+/// Scroll **up** (positive `raw_scroll_delta.y`) zooms in (fewer candles);
+/// scroll **down** zooms out (more candles). Y-axis drag behaves identically
+/// to [`plot_with_y_drag`].
+pub fn plot_with_xy_zoom<S: std::hash::Hash + Copy>(
+    ui: &mut egui::Ui,
+    id_source: S,
+    plot: Plot<'_>,
+    build_fn: impl FnOnce(&mut PlotUi),
+) {
+    let state_id = egui::Id::new(("y_drag_state", id_source));
+    let state: YAxisDragState = ui
+        .data(|d| d.get_temp::<YAxisDragState>(state_id))
+        .unwrap_or_default();
+
+    let x_scroll_delta: f32 = if let Some(frame) = state.plot_frame {
+        if ui.rect_contains_pointer(frame) {
+            let delta = ui.input(|i| i.raw_scroll_delta.y);
+            if delta.abs() > 0.001 {
+                // Consume the scroll event so the parent ScrollArea doesn't
+                // also scroll the app window while the user is X-zooming.
+                ui.input_mut(|i| {
+                    i.raw_scroll_delta = egui::Vec2::ZERO;
+                    i.smooth_scroll_delta = egui::Vec2::ZERO;
+                });
+            }
+            delta
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    };
+
+    plot_with_y_drag(ui, id_source, plot, |plot_ui| {
+        if x_scroll_delta.abs() > 0.001 {
+            let bounds = plot_ui.plot_bounds();
+            let pointer_x = plot_ui
+                .pointer_coordinate()
+                .map(|p| p.x)
+                .unwrap_or((bounds.min()[0] + bounds.max()[0]) * 0.5);
+
+            let zoom_factor =
+                (1.0 + x_scroll_delta as f64 * 0.002).clamp(0.8, 1.25);
+            let new_min_x = pointer_x - (pointer_x - bounds.min()[0]) / zoom_factor;
+            let new_max_x = pointer_x + (bounds.max()[0] - pointer_x) / zoom_factor;
+
+            plot_ui.set_plot_bounds(PlotBounds::from_min_max(
+                [new_min_x, bounds.min()[1]],
+                [new_max_x, bounds.max()[1]],
+            ));
+        }
+        build_fn(plot_ui);
+    });
+}
+
 // ── Plot interaction presets ─────────────────────────────────────────────────
 
 /// Apply the standard Y-axis-only interaction settings to a `Plot`.

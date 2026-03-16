@@ -13,9 +13,11 @@ use burn::{
 use sysinfo::System;
 
 use crate::config;
-use crate::data::models::{ComputeStats, MarketData, NnPredictions, TrainingStatus};
-use crate::nn::dataset::{build_dataset, VolBatcher};
-use crate::nn::model::{VolPredictionModelConfig, NUM_FEATURES, OUTPUT_SIZE};
+use crate::data::models::{
+    BacktestResults, BacktestStatus, ComputeStats, MarketData, NnPredictions, TrainingStatus,
+};
+use crate::nn::dataset::{build_dataset, VolBatcher, VolDataset, VolSample};
+use crate::nn::model::{VolPredictionModel, VolPredictionModelConfig, NUM_FEATURES, OUTPUT_SIZE};
 
 /// GPU training backend: Wgpu with autodiff
 pub type GpuBackend = Autodiff<Wgpu>;
@@ -31,6 +33,8 @@ pub struct TrainingProgress {
     pub predictions: Arc<Mutex<NnPredictions>>,
     pub pause_flag: Arc<AtomicBool>,
     pub compute_stats: Arc<Mutex<ComputeStats>>,
+    pub backtest_status: Arc<Mutex<BacktestStatus>>,
+    pub backtest_results: Arc<Mutex<Option<BacktestResults>>>,
 }
 
 impl TrainingProgress {
@@ -41,6 +45,8 @@ impl TrainingProgress {
             predictions: Arc::new(Mutex::new(NnPredictions::default())),
             pause_flag: Arc::new(AtomicBool::new(false)),
             compute_stats: Arc::new(Mutex::new(ComputeStats::default())),
+            backtest_status: Arc::new(Mutex::new(BacktestStatus::Idle)),
+            backtest_results: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -443,4 +449,235 @@ fn set_status(progress: &TrainingProgress, status: TrainingStatus) {
     if let Ok(mut s) = progress.status.lock() {
         *s = status;
     }
+}
+
+fn set_backtest_status(progress: &TrainingProgress, status: BacktestStatus) {
+    if let Ok(mut s) = progress.backtest_status.lock() {
+        *s = status;
+    }
+}
+
+/// Train a fresh model on the provided samples for `epochs` iterations.
+/// Returns the trained model in inference (non-autodiff) mode, or `None` if
+/// the sample count is too small to form even one batch.
+fn train_model_on_samples<B: AutodiffBackend>(
+    samples: Vec<VolSample>,
+    device: &B::Device,
+    epochs: usize,
+) -> Option<VolPredictionModel<B::InnerBackend>> {
+    if samples.len() < config::NN_BATCH_SIZE {
+        return None;
+    }
+
+    let train_dataset = VolDataset { samples };
+    let batcher = VolBatcher::<B>::new(device.clone());
+    let dataloader = DataLoaderBuilder::new(batcher)
+        .batch_size(config::NN_BATCH_SIZE)
+        .shuffle(42)
+        .build(train_dataset);
+
+    let model_config = VolPredictionModelConfig {
+        input_size: NUM_FEATURES,
+        hidden_size: config::NN_HIDDEN_SIZE,
+        output_size: OUTPUT_SIZE,
+    };
+    let mut model = model_config.init::<B>(device);
+    let mut optim = AdamConfig::new().init();
+
+    for _epoch in 0..epochs {
+        for batch in dataloader.iter() {
+            let output = model.forward(batch.inputs);
+            let loss = mse_loss(output, batch.targets);
+            let grads = loss.backward();
+            let grads = GradientsParams::from_grads(grads, &model);
+            model = optim.step(config::NN_LEARNING_RATE, model, grads);
+        }
+    }
+
+    Some(model.valid())
+}
+
+/// Run model inference on a single sample and return raw prediction floats.
+fn infer_on_sample<B: burn::tensor::backend::Backend>(
+    model: &VolPredictionModel<B>,
+    sample: &VolSample,
+    device: &B::Device,
+) -> Vec<f32> {
+    let seq_len = sample.features.len();
+    let num_features = sample.features.first().map(|f| f.len()).unwrap_or(0);
+    if seq_len == 0 || num_features == 0 {
+        return vec![];
+    }
+
+    let mut input_data = Vec::with_capacity(seq_len * num_features);
+    for step in &sample.features {
+        for &f in step {
+            input_data.push(f as f32);
+        }
+    }
+
+    let input = burn::tensor::Tensor::<B, 1>::from_floats(input_data.as_slice(), device)
+        .reshape([1_usize, seq_len, num_features]);
+    let pred = model.forward(input);
+    pred.into_data().to_vec::<f32>().unwrap_or_default()
+}
+
+fn slice_mean(values: &[f64]) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    values.iter().sum::<f64>() / values.len() as f64
+}
+
+/// Run walk-forward backtesting. Always uses the CPU backend to avoid
+/// WGPU state conflicts when called alongside the main training thread.
+pub fn run_backtest(
+    market_data: &MarketData,
+    progress: &TrainingProgress,
+    _use_gpu: bool,
+    feature_flags: &crate::data::models::NnFeatureFlags,
+) {
+    let device = <NdArray as burn::tensor::backend::Backend>::Device::default();
+    run_backtest_impl::<CpuBackend>(device, market_data, progress, feature_flags);
+}
+
+fn run_backtest_impl<B: AutodiffBackend>(
+    device: B::Device,
+    market_data: &MarketData,
+    progress: &TrainingProgress,
+    feature_flags: &crate::data::models::NnFeatureFlags,
+) {
+    set_backtest_status(progress, BacktestStatus::Running { fold: 0, total_folds: 0 });
+
+    let dataset = build_dataset(
+        market_data,
+        config::NN_LOOKBACK_DAYS,
+        config::NN_FORWARD_DAYS,
+        feature_flags,
+    );
+
+    if dataset.samples.is_empty() {
+        set_backtest_status(
+            progress,
+            BacktestStatus::Error(
+                "Not enough market data to build a backtest dataset.".into(),
+            ),
+        );
+        return;
+    }
+
+    let n = dataset.samples.len();
+    let min_train = ((n as f64 * config::NN_BACKTEST_MIN_TRAIN_FRAC) as usize)
+        .max(config::NN_BATCH_SIZE);
+    let test_window = config::NN_BACKTEST_TEST_WINDOW;
+
+    if n <= min_train + test_window {
+        set_backtest_status(
+            progress,
+            BacktestStatus::Error(format!(
+                "Not enough samples for backtest ({} total, need > {}).",
+                n,
+                min_train + test_window
+            )),
+        );
+        return;
+    }
+
+    let total_folds = (n - min_train) / test_window;
+    if total_folds == 0 {
+        set_backtest_status(
+            progress,
+            BacktestStatus::Error("Insufficient data for even one backtest fold.".into()),
+        );
+        return;
+    }
+
+    let mut fold_maes: Vec<(f64, f64, f64)> = Vec::with_capacity(total_folds);
+    let mut all_vol_errors: Vec<f64> = Vec::new();
+    let mut all_entropy_errors: Vec<f64> = Vec::new();
+    let mut all_kurtosis_errors: Vec<f64> = Vec::new();
+
+    let inference_device =
+        <B::InnerBackend as burn::tensor::backend::Backend>::Device::default();
+
+    for fold in 0..total_folds {
+        set_backtest_status(
+            progress,
+            BacktestStatus::Running { fold: fold + 1, total_folds },
+        );
+
+        let train_end = min_train + fold * test_window;
+        let test_start = train_end;
+        let test_end = (test_start + test_window).min(n);
+
+        let train_samples = dataset.samples[..train_end].to_vec();
+        let test_samples = &dataset.samples[test_start..test_end];
+
+        let model = match train_model_on_samples::<B>(
+            train_samples,
+            &device,
+            config::NN_BACKTEST_EPOCHS,
+        ) {
+            Some(m) => m,
+            None => continue,
+        };
+
+        let mut fold_vol_errors: Vec<f64> = Vec::new();
+        let mut fold_entropy_errors: Vec<f64> = Vec::new();
+        let mut fold_kurtosis_errors: Vec<f64> = Vec::new();
+
+        for sample in test_samples {
+            let pred = infer_on_sample(&model, sample, &inference_device);
+
+            // Volatility: output index 0
+            let vol_err =
+                (pred.first().copied().unwrap_or(0.0) as f64 - sample.target_vol).abs();
+            fold_vol_errors.push(vol_err);
+
+            // Entropy: output indices 1..12 (11 sectors)
+            let entropy_err: f64 = (1..12)
+                .map(|i| {
+                    let p = pred.get(i).copied().unwrap_or(0.0) as f64;
+                    let t = sample.target_randomness.get(i - 1).copied().unwrap_or(0.0);
+                    (p - t).abs()
+                })
+                .sum::<f64>()
+                / 11.0;
+            fold_entropy_errors.push(entropy_err);
+
+            // Kurtosis/skew: output indices 12..34 (22 values)
+            let kurtosis_err: f64 = (12..34)
+                .map(|i| {
+                    let p = pred.get(i).copied().unwrap_or(0.0) as f64;
+                    let t = sample.target_kurtosis.get(i - 12).copied().unwrap_or(0.0);
+                    (p - t).abs()
+                })
+                .sum::<f64>()
+                / 22.0;
+            fold_kurtosis_errors.push(kurtosis_err);
+        }
+
+        fold_maes.push((
+            slice_mean(&fold_vol_errors),
+            slice_mean(&fold_entropy_errors),
+            slice_mean(&fold_kurtosis_errors),
+        ));
+        all_vol_errors.extend(fold_vol_errors);
+        all_entropy_errors.extend(fold_entropy_errors);
+        all_kurtosis_errors.extend(fold_kurtosis_errors);
+    }
+
+    let results = BacktestResults {
+        vol_mae: slice_mean(&all_vol_errors),
+        entropy_mae: slice_mean(&all_entropy_errors),
+        kurtosis_mae: slice_mean(&all_kurtosis_errors),
+        num_folds: total_folds,
+        total_oos_samples: all_vol_errors.len(),
+        fold_maes,
+    };
+
+    if let Ok(mut r) = progress.backtest_results.lock() {
+        *r = Some(results);
+    }
+    set_backtest_status(progress, BacktestStatus::Complete);
 }

@@ -2,7 +2,7 @@ use eframe::egui;
 use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::app::AppState;
-use crate::data::models::TrainingStatus;
+use crate::data::models::{BacktestResults, BacktestStatus, TrainingStatus};
 use crate::nn::training::TrainingProgress;
 use crate::ui::chart_utils::{self, height_control, HoverSeries};
 
@@ -41,6 +41,16 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         }
         if let Ok(stats) = progress.compute_stats.lock() {
             state.compute_stats = stats.clone();
+        }
+    }
+
+    // Sync backtest progress from its background thread
+    if let Some(ref progress) = state.backtest_progress {
+        if let Ok(bt_status) = progress.backtest_status.lock() {
+            state.backtest_status = bt_status.clone();
+        }
+        if let Ok(bt_results) = progress.backtest_results.lock() {
+            state.backtest_results = bt_results.clone();
         }
     }
 
@@ -382,6 +392,16 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.label("No predictions yet. Train the model to generate predictions.");
     }
 
+    // ── Walk-Forward Backtest Section ─────────────────────────────────────
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+    ui.heading("Walk-Forward Backtest");
+    ui.small("Trains a fresh model on expanding windows and measures out-of-sample MAE per output group.");
+    ui.add_space(6.0);
+
+    render_backtest_section(ui, state);
+
     ui.add_space(16.0);
     ui.separator();
     ui.add_space(4.0);
@@ -645,6 +665,203 @@ fn format_param_count(count: usize) -> String {
     } else {
         format!("{}", count)
     }
+}
+
+fn render_backtest_section(ui: &mut egui::Ui, state: &mut AppState) {
+    let is_training = matches!(
+        state.training_status,
+        TrainingStatus::Training { .. } | TrainingStatus::Paused { .. }
+    );
+    let is_backtesting = matches!(state.backtest_status, BacktestStatus::Running { .. });
+
+    match state.backtest_status.clone() {
+        BacktestStatus::Idle => {
+            let btn = egui::Button::new("Run Backtest");
+            if ui
+                .add_enabled(!is_training && !is_backtesting, btn)
+                .on_hover_text("Walk-forward validation across expanding training windows")
+                .clicked()
+            {
+                start_backtest(state);
+            }
+        }
+        BacktestStatus::Running { fold, total_folds } => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                if total_folds > 0 {
+                    ui.label(format!("Fold {fold}/{total_folds} — training and evaluating…"));
+                } else {
+                    ui.label("Initialising backtest…");
+                }
+            });
+            let frac = if total_folds > 0 {
+                fold as f32 / total_folds as f32
+            } else {
+                0.0
+            };
+            ui.add(egui::ProgressBar::new(frac).show_percentage());
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+        }
+        BacktestStatus::Complete => {
+            ui.horizontal(|ui| {
+                ui.colored_label(
+                    egui::Color32::from_rgb(50, 200, 100),
+                    "Backtest complete.",
+                );
+                if ui.button("Re-run").clicked() {
+                    state.backtest_status = BacktestStatus::Idle;
+                    state.backtest_results = None;
+                    state.backtest_progress = None;
+                }
+            });
+            ui.add_space(4.0);
+
+            if let Some(ref results) = state.backtest_results.clone() {
+                render_backtest_results(ui, results);
+            }
+        }
+        BacktestStatus::Error(ref msg) => {
+            ui.horizontal(|ui| {
+                ui.colored_label(
+                    egui::Color32::from_rgb(220, 50, 50),
+                    format!("Backtest error: {msg}"),
+                );
+                if ui.button("Dismiss").clicked() {
+                    state.backtest_status = BacktestStatus::Idle;
+                    state.backtest_progress = None;
+                }
+            });
+        }
+    }
+}
+
+fn render_backtest_results(ui: &mut egui::Ui, results: &BacktestResults) {
+    ui.collapsing("Backtest Results", |ui| {
+        // Summary stats
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.label(format!("Folds: {}", results.num_folds));
+                ui.separator();
+                ui.label(format!("OOS samples: {}", results.total_oos_samples));
+            });
+            ui.add_space(4.0);
+
+            egui::Grid::new("backtest_mae_grid")
+                .striped(true)
+                .min_col_width(130.0)
+                .show(ui, |ui| {
+                    ui.strong("Output Group");
+                    ui.strong("MAE (overall)");
+                    ui.end_row();
+
+                    ui.label("Volatility");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(255, 160, 80),
+                        format!("{:.6}", results.vol_mae),
+                    );
+                    ui.end_row();
+
+                    ui.label("Entropy");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(100, 180, 255),
+                        format!("{:.6}", results.entropy_mae),
+                    );
+                    ui.end_row();
+
+                    ui.label("Kurtosis / Skew");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(180, 130, 255),
+                        format!("{:.6}", results.kurtosis_mae),
+                    );
+                    ui.end_row();
+                });
+        });
+
+        ui.add_space(8.0);
+
+        // Per-fold MAE chart (three lines)
+        if results.fold_maes.len() > 1 {
+            ui.label("Per-fold MAE over time:");
+            ui.add_space(4.0);
+
+            let vol_data: Vec<[f64; 2]> = results
+                .fold_maes
+                .iter()
+                .enumerate()
+                .map(|(i, &(v, _, _))| [i as f64, v])
+                .collect();
+            let entropy_data: Vec<[f64; 2]> = results
+                .fold_maes
+                .iter()
+                .enumerate()
+                .map(|(i, &(_, e, _))| [i as f64, e])
+                .collect();
+            let kurtosis_data: Vec<[f64; 2]> = results
+                .fold_maes
+                .iter()
+                .enumerate()
+                .map(|(i, &(_, _, k))| [i as f64, k])
+                .collect();
+
+            let hover_series = [
+                HoverSeries { name: "Vol MAE",     data: &vol_data,     decimals: 6, suffix: "" },
+                HoverSeries { name: "Entropy MAE", data: &entropy_data, decimals: 6, suffix: "" },
+                HoverSeries { name: "Kurt MAE",    data: &kurtosis_data, decimals: 6, suffix: "" },
+            ];
+
+            let vol_plot = vol_data.clone();
+            let entropy_plot = entropy_data.clone();
+            let kurtosis_plot = kurtosis_data.clone();
+
+            chart_utils::plot_with_y_drag(
+                ui,
+                "backtest_fold_mae",
+                chart_utils::default_plot_interaction(
+                    Plot::new("backtest_fold_mae")
+                        .height(200.0),
+                )
+                .x_axis_label("Fold")
+                .y_axis_label("MAE")
+                .coordinates_formatter(
+                    chart_utils::HOVER_CORNER,
+                    chart_utils::hover_formatter(&hover_series),
+                )
+                .label_formatter(chart_utils::no_hover_label),
+                |plot_ui| {
+                    plot_ui.line(
+                        Line::new(PlotPoints::from(vol_plot))
+                            .name("Vol MAE")
+                            .color(egui::Color32::from_rgb(255, 160, 80)),
+                    );
+                    plot_ui.line(
+                        Line::new(PlotPoints::from(entropy_plot))
+                            .name("Entropy MAE")
+                            .color(egui::Color32::from_rgb(100, 180, 255)),
+                    );
+                    plot_ui.line(
+                        Line::new(PlotPoints::from(kurtosis_plot))
+                            .name("Kurtosis/Skew MAE")
+                            .color(egui::Color32::from_rgb(180, 130, 255)),
+                    );
+                },
+            );
+        }
+    });
+}
+
+fn start_backtest(state: &mut AppState) {
+    let progress = TrainingProgress::new();
+    state.backtest_progress = Some(progress.clone());
+    state.backtest_status = BacktestStatus::Running { fold: 0, total_folds: 0 };
+    state.backtest_results = None;
+
+    let market_data = state.market_data.clone();
+    let use_gpu = state.use_gpu;
+    let feature_flags = state.nn_feature_flags.clone();
+
+    std::thread::spawn(move || {
+        crate::nn::training::run_backtest(&market_data, &progress, use_gpu, &feature_flags);
+    });
 }
 
 fn start_training(state: &mut AppState) {

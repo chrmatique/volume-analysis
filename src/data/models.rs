@@ -236,6 +236,33 @@ impl Default for TrainingStatus {
     }
 }
 
+/// Walk-forward backtest results with per-group MAE
+#[derive(Debug, Clone)]
+pub struct BacktestResults {
+    pub vol_mae: f64,
+    pub entropy_mae: f64,
+    pub kurtosis_mae: f64,
+    pub num_folds: usize,
+    pub total_oos_samples: usize,
+    /// Per-fold MAE tuple: (vol_mae, entropy_mae, kurtosis_mae)
+    pub fold_maes: Vec<(f64, f64, f64)>,
+}
+
+/// Walk-forward backtest execution status
+#[derive(Debug, Clone)]
+pub enum BacktestStatus {
+    Idle,
+    Running { fold: usize, total_folds: usize },
+    Complete,
+    Error(String),
+}
+
+impl Default for BacktestStatus {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 /// Neural network feature flags for toggling input feature groups during training
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NnFeatureFlags {

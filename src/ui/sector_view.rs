@@ -181,13 +181,14 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             })
             .collect();
 
-        chart_utils::plot_with_y_drag(
+        chart_utils::plot_with_xy_zoom(
             ui,
             "price_plot",
-            chart_utils::default_plot_interaction(
-                Plot::new("price_plot")
-                    .height(state.chart_heights.sector_price),
-            )
+            Plot::new("price_plot")
+                .height(state.chart_heights.sector_price)
+                .allow_drag(egui::Vec2b::new(true, true))
+                .allow_scroll(false)
+                .allow_zoom(egui::Vec2b::new(true, true))
                 .x_axis_label(x_label)
                 .y_axis_label("Price ($)")
                 .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&hover))

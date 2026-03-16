@@ -93,3 +93,11 @@ pub const NN_HIDDEN_SIZE: usize = 64;
 pub const NN_LEARNING_RATE: f64 = 1e-3;
 pub const NN_EPOCHS: usize = 1000;
 pub const NN_BATCH_SIZE: usize = 32;
+
+/// Walk-forward backtest configuration
+/// Minimum fraction of total samples used for the first training window
+pub const NN_BACKTEST_MIN_TRAIN_FRAC: f64 = 0.6;
+/// Number of samples in each out-of-sample test window per fold
+pub const NN_BACKTEST_TEST_WINDOW: usize = 50;
+/// Reduced epochs per fold (faster than full NN_EPOCHS)
+pub const NN_BACKTEST_EPOCHS: usize = 500;

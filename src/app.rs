@@ -6,8 +6,9 @@ use crate::analysis;
 use crate::config;
 use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
-    BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo, KurtosisMetrics, MarketData,
-    NnFeatureFlags, NnPredictions, PcaResult, ScreenshotSettings, TrainingStatus, VolatilityMetrics,
+    BacktestResults, BacktestStatus, BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo,
+    KurtosisMetrics, MarketData, NnFeatureFlags, NnPredictions, PcaResult, ScreenshotSettings,
+    TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
@@ -159,6 +160,12 @@ pub struct AppState {
     pub fmp_api_key: String,
     /// Timescale for candlestick chart in the Sector view
     pub candle_timescale: CandleTimescale,
+    /// Walk-forward backtest status (synced from backtest_progress)
+    pub backtest_status: BacktestStatus,
+    /// Walk-forward backtest results (synced from backtest_progress)
+    pub backtest_results: Option<BacktestResults>,
+    /// Background thread state for the backtest run
+    pub backtest_progress: Option<TrainingProgress>,
 }
 
 impl Default for AppState {
@@ -202,6 +209,9 @@ impl Default for AppState {
             corr_lookback: 90,
             fmp_api_key: config::fmp_api_key(),
             candle_timescale: CandleTimescale::default(),
+            backtest_status: BacktestStatus::default(),
+            backtest_results: None,
+            backtest_progress: None,
         }
     }
 }

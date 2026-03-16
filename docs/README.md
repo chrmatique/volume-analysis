@@ -1,6 +1,6 @@
 # Codebase documentation
 
-Visual codebase map for **mkt-noise-analysis**.
+Visual codebase map and file reference for **mkt-noise-analysis**.
 
 ## Viewing
 
@@ -8,12 +8,12 @@ Open `index.html` in a web browser:
 
 ```bash
 # From project root
-start docs/index.html     # Windows
-open docs/index.html     # macOS
-xdg-open docs/index.html # Linux
+start docs/index.html      # Windows
+open docs/index.html       # macOS
+xdg-open docs/index.html   # Linux
 ```
 
-Or serve locally:
+Or serve locally (required for some browsers due to CORS on local files):
 
 ```bash
 cd docs && python -m http.server 8000
@@ -22,10 +22,10 @@ cd docs && python -m http.server 8000
 
 ## Contents
 
-- **index.html** — Visual codebase map: module dependency flow, file tree, module overview, Cargo dependencies, data flow diagram
-- **file-reference.html** — File-by-file reference with descriptions
+- **index.html** — Visual codebase map: module dependency flow, file tree, module overview cards, Cargo dependency table, data flow diagram, AppState field reference
+- **file-reference.html** — File-by-file descriptions for every Rust source file, grouped by module
 
 ## Requirements
 
 - Modern browser (Chrome, Firefox, Edge, Safari)
-- Internet connection for Mermaid.js CDN (for diagram rendering)
+- Internet connection for Mermaid.js CDN (diagram rendering in index.html)

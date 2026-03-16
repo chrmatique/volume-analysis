@@ -13,6 +13,8 @@
       --text-muted: #8b949e;
       --accent: #58a6ff;
       --green: #3fb950;
+      --purple: #a371f7;
+      --orange: #d29922;
     }
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
@@ -21,59 +23,260 @@
       line-height: 1.5;
       margin: 0;
       padding: 2rem;
-      max-width: 900px;
+      max-width: 1000px;
       margin-inline: auto;
     }
-    h1 { font-size: 1.5rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     .back { margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
     th { color: var(--text-muted); font-weight: 500; font-size: 0.85rem; }
-    .path { font-family: Consolas, monospace; font-size: 0.9rem; color: var(--green); }
+    tr:last-child td { border-bottom: none; }
+    .path { font-family: Consolas, monospace; font-size: 0.88rem; color: var(--green); white-space: nowrap; }
+    .desc { font-size: 0.9rem; }
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 0.1em 0.45em;
+      border-radius: 3px;
+      margin-right: 3px;
+      vertical-align: middle;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .tag.new { border-color: var(--green); color: var(--green); }
+    .tag.core { border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
   <div class="back"><a href="index.html">← Back to codebase map</a></div>
   <h1>File reference</h1>
-  <p style="color: var(--text-muted);">All Rust source files with descriptions.</p>
+  <p style="color: var(--text-muted);">All Rust source files with descriptions. Grouped by module.</p>
 
+  <!-- ── Root ── -->
+  <h2>Root</h2>
   <table>
-    <thead>
-      <tr><th>Path</th><th>Description</th></tr>
-    </thead>
+    <thead><tr><th>Path</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td class="path">src/main.rs</td><td>Binary entry; eframe setup, tab routing</td></tr>
-      <tr><td class="path">src/app.rs</td><td>MktNoiseApp, AppState, analysis orchestration, async data fetch; corr_lookback, recompute_correlation()</td></tr>
-      <tr><td class="path">src/config.rs</td><td>Sector ETFs, windows, NN params, .env loading</td></tr>
-      <tr><td class="path">src/data/mod.rs</td><td>data crate module</td></tr>
-      <tr><td class="path">src/data/cache.rs</td><td>Yahoo/FMP response caching</td></tr>
-      <tr><td class="path">src/data/fmp.rs</td><td>FMP API: treasury rates, sector performance</td></tr>
-      <tr><td class="path">src/data/models.rs</td><td>MarketData, VolatilityMetrics, BondSpread, CorrelationMatrix, PcaResult, etc.</td></tr>
-      <tr><td class="path">src/data/yahoo.rs</td><td>Yahoo Finance OHLCV and sector ETF fetching</td></tr>
-      <tr><td class="path">src/analysis/mod.rs</td><td>analysis module</td></tr>
-      <tr><td class="path">src/analysis/bond_spreads.rs</td><td>Term spread, yield curve, inversion detection</td></tr>
-      <tr><td class="path">src/analysis/cross_sector.rs</td><td>Correlation matrix, Jacobi eigendecomposition, PCA, Marchenko-Pastur bound, windowed correlation</td></tr>
-      <tr><td class="path">src/analysis/kurtosis.rs</td><td>Kurtosis, skewness, Jarque-Bera, KDE density</td></tr>
-      <tr><td class="path">src/analysis/randomness.rs</td><td>Sector randomness / entropy metrics</td></tr>
-      <tr><td class="path">src/analysis/volatility.rs</td><td>Sector volatility (short/long windows, Parkinson)</td></tr>
-      <tr><td class="path">src/nn/mod.rs</td><td>nn module, LoadedModel alias</td></tr>
-      <tr><td class="path">src/nn/dataset.rs</td><td>NN dataset construction, feature engineering</td></tr>
-      <tr><td class="path">src/nn/gpu.rs</td><td>WGPU adapter detection</td></tr>
-      <tr><td class="path">src/nn/model.rs</td><td>VolPredictionModel (LSTM), config</td></tr>
-      <tr><td class="path">src/nn/persistence.rs</td><td>Save/load trained models</td></tr>
-      <tr><td class="path">src/nn/training.rs</td><td>Training loop, inference</td></tr>
-      <tr><td class="path">src/ui/mod.rs</td><td>ui module</td></tr>
-      <tr><td class="path">src/ui/bond_view.rs</td><td>Bonds tab: yield curve, term spread, curve slope</td></tr>
-      <tr><td class="path">src/ui/chart_utils.rs</td><td>Shared chart helpers (height_control)</td></tr>
-      <tr><td class="path">src/ui/correlation_view.rs</td><td>Correlations tab: lookback selector (30/60/90d), correlation matrix grid, PCA loadings heatmap, Marchenko-Pastur noise indicators</td></tr>
-      <tr><td class="path">src/ui/dashboard.rs</td><td>Dashboard: 3D probability distribution plot</td></tr>
-      <tr><td class="path">src/ui/kurtosis_view.rs</td><td>Kurtosis tab: distribution, rolling kurtosis/skewness</td></tr>
-      <tr><td class="path">src/ui/nn_view.rs</td><td>Neural Net tab: training UI, predictions</td></tr>
-      <tr><td class="path">src/ui/sector_view.rs</td><td>Sector Vol tab: price, volatility, ratio charts</td></tr>
-      <tr><td class="path">src/ui/settings_view.rs</td><td>Settings tab: NN feature flags</td></tr>
+      <tr>
+        <td class="path">src/main.rs</td>
+        <td class="desc">Binary entry point. Initialises tracing, loads .env, creates the tokio runtime, and launches the eframe window (800 × 600 min size, native WebGL viewport).</td>
+      </tr>
+      <tr>
+        <td class="path">src/app.rs</td>
+        <td class="desc">
+          <strong>MktNoiseApp</strong> — eframe::App impl; drives the update loop, tab bar, status bar, and screenshot capture (ViewportCommand::Screenshot → save_screenshot()).<br>
+          <strong>AppState</strong> — all shared runtime state: market_data, analysis, kurtosis_window, corr_lookback, fmp_api_key, nn_feature_flags, screenshot_settings, training_status, loaded_model, plot_3d, chart_heights, available_gpus.<br>
+          <strong>AnalysisResults</strong> — derived analysis outputs (volatility, correlation, pca, bond_spreads, kurtosis, randomness).<br>
+          <strong>ChartHeights</strong> — 12 per-chart height overrides adjustable at runtime.<br>
+          <strong>Plot3DState</strong> — draggable 3D plot state (pitch, yaw, sector pair, texture).<br>
+          Key methods: recompute_analysis(), recompute_correlation(), recompute_kurtosis(), start_data_fetch().
+        </td>
+      </tr>
+      <tr>
+        <td class="path">src/config.rs</td>
+        <td class="desc">
+          Constants: SECTOR_ETFS (11 SPDRs), BENCHMARK_SYMBOL = "SPY", DEFAULT_LOOKBACK_DAYS = 730, SHORT_VOL_WINDOW = 21, LONG_VOL_WINDOW = 63, NN_LOOKBACK_DAYS = 60, NN_FORWARD_DAYS = 5, NN_HIDDEN_SIZE = 64, NN_LEARNING_RATE = 1e-3, NN_EPOCHS = 1000, NN_BATCH_SIZE = 32.<br>
+          Functions: fmp_api_key() (reads FMP_API_KEY env var), load_env() (parses .env), save_env_file() (upserts a key in .env on disk).
+        </td>
+      </tr>
     </tbody>
   </table>
+
+  <!-- ── data ── -->
+  <h2>src/data/</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="path">src/data/mod.rs</td>
+        <td class="desc">Re-exports the data sub-modules (cache, cboe, fmp, models, yahoo).</td>
+      </tr>
+      <tr>
+        <td class="path">src/data/cache.rs</td>
+        <td class="desc">JSON file-based caching. load_json&lt;T&gt;() / save_json&lt;T&gt;() helpers used by all data fetchers and the settings persistence layer. Files live in the process working directory.</td>
+      </tr>
+      <tr>
+        <td class="path">src/data/cboe.rs</td>
+        <td class="desc">
+          Fetches CBOE data over HTTP with a 6-hour file cache.<br>
+          fetch_put_call_ratio() — downloads totalpc.csv; returns Vec&lt;PutCallRecord&gt; (date, pc_ratio).<br>
+          fetch_skew_history() — downloads SKEW_History.csv; returns Vec&lt;SkewRecord&gt; (date, skew).<br>
+          Handles multiple date formats (YYYY-MM-DD, M/D/YYYY, M/D/YY) via parse_date().
+        </td>
+      </tr>
+      <tr>
+        <td class="path">src/data/fmp.rs</td>
+        <td class="desc">Financial Modeling Prep API client. fetch_treasury_rates() — retrieves 12-tenor yield curve history. fetch_sector_performance() — snapshot sector average % changes. Both use JSON caching via cache.rs.</td>
+      </tr>
+      <tr>
+        <td class="path">src/data/models.rs</td>
+        <td class="desc">
+          All domain data structs:<br>
+          <strong>OhlcvBar</strong>, <strong>SectorTimeSeries</strong> (with log_returns(), close_prices(), dates(), highs(), lows()),
+          <strong>TreasuryRate</strong> (12 tenors, parsed_date()),
+          <strong>PutCallRecord</strong>, <strong>SkewRecord</strong>,
+          <strong>BondSpread</strong> (spread_10y_2y, curve_slope),
+          <strong>SectorPerformance</strong>,
+          <strong>VolatilityMetrics</strong> (short_window_vol, long_window_vol, parkinson_vol, vol_ratio),
+          <strong>KurtosisAccelMetrics</strong> (velocity, acceleration, projected_accel, projected_kurtosis, trend),
+          <strong>KurtosisMetrics</strong> (symbol, mean, std_dev, excess_kurtosis, skewness, jarque_bera, rolling_*, empirical_density, normal_density, accel_metrics),
+          <strong>NnPredictions</strong> (vol, randomness, kurtosis per sector),
+          <strong>CorrelationMatrix</strong>, <strong>PcaResult</strong> (eigenvalues, eigenvectors, mp_upper),
+          <strong>TrainingStatus</strong> (Idle/Training/Paused/Complete/Error),
+          <strong>GpuAdapterInfo</strong>, <strong>ComputeStats</strong> (CPU%, memory, GPU VRAM/util/temp, samples/s),
+          <strong>NnFeatureFlags</strong> (sector_volatility, market_randomness, kurtosis),
+          <strong>ScreenshotFileType</strong> (Png/Jpeg/Tiff), <strong>ScreenshotCompression</strong> (None/Low/High),
+          <strong>ScreenshotSettings</strong> (save_path, file_type, compression),
+          <strong>MarketData</strong> (sectors, benchmark, treasury_rates, sector_performance, put_call_ratio, skew_history, last_refresh).
+        </td>
+      </tr>
+      <tr>
+        <td class="path">src/data/yahoo.rs</td>
+        <td class="desc">Yahoo Finance OHLCV fetching. fetch_all_sectors() — concurrent fetch of all 11 sector ETFs over DEFAULT_LOOKBACK_DAYS (730 days). fetch_symbol_history() — single symbol. Returns SectorTimeSeries. Uses yahoo_finance_api v4.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── analysis ── -->
+  <h2>src/analysis/</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="path">src/analysis/mod.rs</td>
+        <td class="desc">Re-exports the analysis sub-modules.</td>
+      </tr>
+      <tr>
+        <td class="path">src/analysis/volatility.rs</td>
+        <td class="desc">compute_sector_volatility() — rolling short (21-bar) and long (63-bar) annualised log-return vol, Parkinson high-low estimator, and vol ratio (short/long). Returns VolatilityMetrics.</td>
+      </tr>
+      <tr>
+        <td class="path">src/analysis/cross_sector.rs</td>
+        <td class="desc">
+          compute_correlation_matrix() — full-history Pearson correlation for N sectors.<br>
+          compute_correlation_matrix_windowed() — windowed version using the last corr_lookback observations.<br>
+          average_cross_correlation() — mean of off-diagonal elements.<br>
+          compute_pca() — Jacobi iterative eigendecomposition; returns PcaResult with eigenvalues, eigenvectors, and Marchenko-Pastur upper bound (1 + √(N/T))².
+        </td>
+      </tr>
+      <tr>
+        <td class="path">src/analysis/bond_spreads.rs</td>
+        <td class="desc">compute_term_spreads() — computes 10Y-2Y term spread and curve slope from TreasuryRate series. Returns Vec&lt;BondSpread&gt;. Inversion is implicitly visible when spread_10y_2y &lt; 0.</td>
+      </tr>
+      <tr>
+        <td class="path">src/analysis/kurtosis.rs</td>
+        <td class="desc">
+          compute_sector_kurtosis() — rolling excess kurtosis (4th standardised central moment − 3) and rolling skewness over a configurable window; Jarque-Bera normality test; KDE empirical density and fitted normal density curves.<br>
+          KurtosisAccelMetrics computed when sufficient rolling data exists: velocity (1st differences), acceleration (2nd differences), projected_accel, projected_kurtosis, trend direction.
+        </td>
+      </tr>
+      <tr>
+        <td class="path">src/analysis/randomness.rs</td>
+        <td class="desc">compute_sector_randomness() — per-sector market randomness / entropy metrics derived from log returns. Returns SectorRandomness used as NN features and displayed in the Dashboard.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── nn ── -->
+  <h2>src/nn/</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="path">src/nn/mod.rs</td>
+        <td class="desc">nn module root. Exports LoadedModel type alias (the burn model type used for inference after loading from disk).</td>
+      </tr>
+      <tr>
+        <td class="path">src/nn/dataset.rs</td>
+        <td class="desc">build_dataset() — constructs time-windowed samples (NN_LOOKBACK_DAYS = 60) from MarketData; features include rolling volatility, log returns, randomness metrics, kurtosis/skewness, cross-correlations, bond spread, yield curve slope, and a VIX proxy (~70 features total). NnFeatureFlags gates feature groups. VolBatcher implements burn's Batcher trait.</td>
+      </tr>
+      <tr>
+        <td class="path">src/nn/model.rs</td>
+        <td class="desc">VolPredictionModel — single LSTM layer (hidden_size = 64) followed by a Linear projection. Input: feature_size × lookback sequence. Output: per-sector vol + entropy + kurtosis/skewness predictions. Configured via VolPredictionModelConfig.</td>
+      </tr>
+      <tr>
+        <td class="path">src/nn/training.rs</td>
+        <td class="desc">train() — full training loop: burn Learner, AdamW optimiser (lr = 1e-3), 1000 epochs, batch size 32, MSE loss. Runs on WGPU or ndarray backend based on AppState.use_gpu. Streams TrainingProgress (status, losses, predictions) via Arc&lt;Mutex&gt; channels for live UI updates. run_inference() — forward pass on loaded model.</td>
+      </tr>
+      <tr>
+        <td class="path">src/nn/persistence.rs</td>
+        <td class="desc">save_model() / load_model() — serialize/deserialize model weights using burn's record API. Saves alongside ModelMetadata (trained_at timestamp, final_loss, feature count). Loaded at AppState::default() to skip retraining.</td>
+      </tr>
+      <tr>
+        <td class="path">src/nn/gpu.rs</td>
+        <td class="desc">detect_wgpu_adapters() — enumerates WGPU-capable GPU adapters (NVIDIA, AMD, Intel). Returns Vec&lt;GpuAdapterInfo&gt;. Called at startup and after each data refresh.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ── ui ── -->
+  <h2>src/ui/</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="path">src/ui/mod.rs</td>
+        <td class="desc">Re-exports all ui sub-modules.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/chart_utils.rs</td>
+        <td class="desc">Shared chart helpers. height_control() — drag-to-resize handle drawn below each chart, updates ChartHeights in AppState. HoverSeries — egui_plot series with nearest-point tooltip support.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/dashboard.rs</td>
+        <td class="desc">
+          Dashboard tab. Renders:<br>
+          — Summary metric cards (sectors loaded, SPY last close, avg cross-correlation, 10Y-2Y spread, treasury data points).<br>
+          — 3D probability distribution plot (plotters, off-screen render to texture, drag to rotate pitch/yaw, sector X/Y pair selector).<br>
+          — Sector performance bar chart (FMP data).<br>
+          — CBOE put/call ratio time series chart.<br>
+          — CBOE SKEW index time series chart.
+        </td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/sector_view.rs</td>
+        <td class="desc">Sector Vol tab. Per-sector close price chart, short/long rolling volatility chart, and vol ratio chart. Sector selector dropdown. Resizable chart heights.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/correlation_view.rs</td>
+        <td class="desc">Correlations tab. Lookback selector (30/60/90 days) triggers recompute_correlation(). Renders: N×N correlation matrix heatmap grid, PC loadings heatmap, Marchenko-Pastur noise boundary indicators per principal component.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/bond_view.rs</td>
+        <td class="desc">Bonds tab. Yield curve line plot (multi-tenor snapshot), 10Y-2Y term spread over time, yield curve slope chart. Inversion visually apparent when spread crosses zero.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/kurtosis_view.rs</td>
+        <td class="desc">Kurtosis tab. Sector selector, rolling window selector (triggers recompute_kurtosis()). Charts: empirical KDE vs fitted normal distribution, rolling excess kurtosis, rolling skewness, kurtosis acceleration (velocity + acceleration series from KurtosisAccelMetrics). Displays projected kurtosis and trend direction.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/nn_view.rs</td>
+        <td class="desc">Neural Net tab (heading: "Volatility Regime Prediction"). Model architecture summary. Training controls: Start / Pause / Resume buttons; epoch + loss progress bar; live loss curve chart (resizable). Compute stats panel: backend, CPU%, memory, GPU name/VRAM/utilization/temperature, samples/sec. Predictions table: per-sector vol, randomness, and kurtosis/skewness forecasts. Model save/load buttons + persistence message.</td>
+      </tr>
+      <tr>
+        <td class="path">src/ui/settings_view.rs</td>
+        <td class="desc">
+          Settings tab. Three sections:<br>
+          — <strong>API Keys</strong>: FMP API key text field (show/hide password), Save button writes to .env via config::save_env_file() and clears FMP cache files.<br>
+          — <strong>Screenshot</strong>: save path (native OS folder picker via PowerShell FolderBrowserDialog on Windows / zenity on Linux), file type selector (PNG/JPEG/TIFF), compression selector (None/Low/High). Settings persisted to screenshot_settings.json.<br>
+          — <strong>Neural Network Training</strong>: feature flag checkboxes (Sector Volatility, Market Randomness, Kurtosis). Settings persisted to nn_feature_flags.json.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
 </body>
 </html>

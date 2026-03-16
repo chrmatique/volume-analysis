@@ -14,6 +14,29 @@ use crate::nn::training::TrainingProgress;
 use crate::nn::LoadedModel;
 use crate::ui;
 
+/// Candlestick timescale for the sector price chart
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CandleTimescale {
+    #[default]
+    Day,
+    Week,
+    Month,
+}
+
+impl CandleTimescale {
+    pub fn label(self) -> &'static str {
+        match self {
+            CandleTimescale::Day => "1-Day",
+            CandleTimescale::Week => "1-Week",
+            CandleTimescale::Month => "1-Month",
+        }
+    }
+
+    pub fn all() -> &'static [CandleTimescale] {
+        &[CandleTimescale::Day, CandleTimescale::Week, CandleTimescale::Month]
+    }
+}
+
 /// Active tab in the main UI
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -134,6 +157,8 @@ pub struct AppState {
     pub corr_lookback: usize,
     /// FMP API key — editable at runtime via the Settings tab
     pub fmp_api_key: String,
+    /// Timescale for candlestick chart in the Sector view
+    pub candle_timescale: CandleTimescale,
 }
 
 impl Default for AppState {
@@ -176,6 +201,7 @@ impl Default for AppState {
             kurtosis_window: 30,
             corr_lookback: 90,
             fmp_api_key: config::fmp_api_key(),
+            candle_timescale: CandleTimescale::default(),
         }
     }
 }

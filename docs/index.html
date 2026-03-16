@@ -121,24 +121,27 @@
     <h2>Module dependency flow</h2>
     <div class="mermaid">
 flowchart TB
-  subgraph main["main.rs"]
+  subgraph mainMod["main.rs"]
     M[main.rs]
   end
   C[config]
-  subgraph app["app"]
+  subgraph appMod["app"]
     A[app.rs]
   end
-  subgraph data["data"]
+  subgraph dataMod["data"]
     D1[cache.rs]
     D2[fmp.rs]
     D3[models.rs]
     D4[yahoo.rs]
+    D5[cboe.rs]
     D1 --> D2
     D1 --> D4
+    D1 --> D5
     D2 --> D3
     D4 --> D3
+    D5 --> D3
   end
-  subgraph analysis["analysis"]
+  subgraph analysisMod["analysis"]
     A1[volatility.rs]
     A2[cross_sector.rs]
     A3[bond_spreads.rs]
@@ -150,7 +153,7 @@ flowchart TB
     A4 --> D3
     A5 --> D3
   end
-  subgraph nn["nn"]
+  subgraph nnMod["nn"]
     N1[dataset.rs]
     N2[model.rs]
     N3[training.rs]
@@ -164,7 +167,7 @@ flowchart TB
     N4 --> D1
     N4 --> N2
   end
-  subgraph ui["ui"]
+  subgraph uiMod["ui"]
     U1[dashboard.rs]
     U2[sector_view.rs]
     U3[correlation_view.rs]
@@ -180,12 +183,12 @@ flowchart TB
   end
   M --> A
   M --> C
-  A --> data
-  A --> analysis
-  A --> nn
-  A --> ui
-  A --> C[config]
-  </div>
+  A --> dataMod
+  A --> analysisMod
+  A --> nnMod
+  A --> uiMod
+  A --> C
+    </div>
   </section>
 
   <section>
@@ -196,6 +199,7 @@ flowchart TB
         <li><ul>
           <li class="file toml">Cargo.toml</li>
           <li class="file md">README.md</li>
+          <li class="file md">.env &nbsp;<span style="color:var(--text-muted);font-size:0.8rem">(gitignored — FMP_API_KEY)</span></li>
           <li class="dir">src/</li>
           <li><ul>
             <li class="file rs">main.rs</li>
@@ -205,6 +209,7 @@ flowchart TB
             <li><ul>
               <li class="file rs">mod.rs</li>
               <li class="file rs">cache.rs</li>
+              <li class="file rs">cboe.rs</li>
               <li class="file rs">fmp.rs</li>
               <li class="file rs">models.rs</li>
               <li class="file rs">yahoo.rs</li>
@@ -240,10 +245,18 @@ flowchart TB
               <li class="file rs">chart_utils.rs</li>
             </ul></li>
           </ul></li>
-          <li class="dir">cache/</li>
+          <li class="dir">cache/ &nbsp;<span style="color:var(--text-muted);font-size:0.8rem">(gitignored)</span></li>
           <li><ul>
             <li class="file">yahoo_*.json</li>
             <li class="file">fmp_*.json</li>
+            <li class="file">screenshot_settings.json</li>
+            <li class="file">nn_feature_flags.json</li>
+          </ul></li>
+          <li class="dir">docs/</li>
+          <li><ul>
+            <li class="file md">README.md</li>
+            <li class="file">index.html</li>
+            <li class="file">file-reference.html</li>
           </ul></li>
         </ul></li>
       </ul>
@@ -253,63 +266,89 @@ flowchart TB
   <section>
     <h2>Module overview</h2>
     <div class="module-card">
+
       <div class="card">
         <h3>app</h3>
-        <p>Application shell, tab routing, AppState, async data fetch.</p>
+        <p>Application shell, tab routing, state, async orchestration, screenshot capture.</p>
         <ul>
-          <li>MktNoiseApp, Tab enum, AppState</li>
-          <li>ChartHeights, Plot3DState, TrainingStatus</li>
-          <li>corr_lookback (30/60/90d), recompute_correlation()</li>
+          <li>MktNoiseApp, Tab (Dashboard/SectorVol/Correlations/Bonds/Kurtosis/NeuralNet/Settings)</li>
+          <li>AppState — market_data, analysis, kurtosis_window, corr_lookback, fmp_api_key</li>
+          <li>AnalysisResults — volatility, correlation, pca, bond_spreads, kurtosis, randomness</li>
+          <li>ChartHeights — per-chart height overrides (12 charts)</li>
+          <li>Plot3DState — pitch/yaw/texture for 3D distribution plot</li>
+          <li>recompute_analysis(), recompute_correlation(), recompute_kurtosis()</li>
+          <li>save_screenshot() — PNG/JPEG/TIFF via <code>image</code> crate</li>
         </ul>
       </div>
+
       <div class="card">
         <h3>config</h3>
-        <p>Sector ETFs, window sizes, NN params, .env loading.</p>
+        <p>Constants, API key loading, and .env file management.</p>
         <ul>
-          <li>SECTOR_ETFS, SHORT_VOL_WINDOW, LONG_VOL_WINDOW</li>
-          <li>fmp_api_key(), load_env()</li>
+          <li>SECTOR_ETFS — 11 SPDR sector ETFs (XLK, XLF, XLE…)</li>
+          <li>BENCHMARK_SYMBOL = "SPY", DEFAULT_LOOKBACK_DAYS = 730</li>
+          <li>SHORT_VOL_WINDOW = 21, LONG_VOL_WINDOW = 63</li>
+          <li>NN_LOOKBACK_DAYS = 60, NN_EPOCHS = 1000, NN_HIDDEN_SIZE = 64</li>
+          <li>fmp_api_key(), load_env(), save_env_file()</li>
         </ul>
       </div>
+
       <div class="card">
         <h3>data</h3>
-        <p>Yahoo & FMP fetching, caching, MarketData models.</p>
+        <p>Market data fetching, caching, and domain models.</p>
         <ul>
-          <li>yahoo.rs — OHLCV, sector ETFs</li>
-          <li>fmp.rs — treasury rates, sector performance</li>
-          <li>models.rs — MarketData, VolatilityMetrics, BondSpread, CorrelationMatrix, PcaResult, etc.</li>
+          <li>yahoo.rs — OHLCV for 11 sector ETFs + SPY benchmark (2-year lookback)</li>
+          <li>fmp.rs — treasury rates (12 tenors), sector performance via FMP API</li>
+          <li>cboe.rs — put/call ratio (totalpc.csv), CBOE SKEW index history; 6-hour cache</li>
+          <li>cache.rs — JSON file caching (load_json / save_json)</li>
+          <li>models.rs — OhlcvBar, SectorTimeSeries, TreasuryRate, PutCallRecord, SkewRecord,
+            MarketData, VolatilityMetrics, KurtosisMetrics, KurtosisAccelMetrics,
+            BondSpread, CorrelationMatrix, PcaResult, NnPredictions,
+            NnFeatureFlags, ScreenshotSettings, TrainingStatus, ComputeStats, GpuAdapterInfo</li>
         </ul>
       </div>
+
       <div class="card">
         <h3>analysis</h3>
-        <p>Volatility, correlation, PCA, bond spreads, kurtosis, randomness.</p>
+        <p>Quantitative analysis algorithms over market data.</p>
         <ul>
-          <li>volatility.rs — short/long rolling vol</li>
-          <li>cross_sector.rs — correlation matrix, Jacobi PCA, Marchenko-Pastur, windowed correlation</li>
-          <li>bond_spreads.rs — 10Y-2Y, yield curve</li>
-          <li>kurtosis.rs, randomness.rs</li>
+          <li>volatility.rs — short/long rolling vol, Parkinson estimator, vol ratio</li>
+          <li>cross_sector.rs — correlation matrix, Jacobi eigendecomposition, PCA,
+            Marchenko-Pastur upper bound, windowed correlation</li>
+          <li>bond_spreads.rs — 10Y-2Y term spread, yield curve, inversion detection</li>
+          <li>kurtosis.rs — excess kurtosis, skewness, Jarque-Bera, KDE density,
+            rolling kurtosis/skewness, KurtosisAccelMetrics (velocity, acceleration, projection)</li>
+          <li>randomness.rs — per-sector entropy / market randomness metrics</li>
         </ul>
       </div>
+
       <div class="card">
         <h3>nn</h3>
-        <p>Burn-based neural network: dataset, model, training, persistence.</p>
+        <p>Burn-based LSTM neural network for volatility regime prediction.</p>
         <ul>
-          <li>dataset.rs — build_dataset, VolBatcher</li>
-          <li>model.rs — VolPredictionModel (LSTM)</li>
-          <li>training.rs — train, run_inference</li>
-          <li>persistence.rs, gpu.rs</li>
+          <li>dataset.rs — build_dataset(), VolBatcher; features: vol, returns, randomness, kurtosis, cross-corr, spread, slope, VIX-proxy (70 features)</li>
+          <li>model.rs — VolPredictionModel (LSTM hidden=64 → Linear), config</li>
+          <li>training.rs — training loop (1000 epochs, batch=32), run_inference()</li>
+          <li>persistence.rs — save/load model weights + ModelMetadata; LoadedModel alias</li>
+          <li>gpu.rs — WGPU adapter detection (NVIDIA/AMD/Intel)</li>
         </ul>
       </div>
+
       <div class="card">
         <h3>ui</h3>
-        <p>eframe/egui views: Dashboard, Sector Vol, Correlations, Bonds, Kurtosis, NN, Settings.</p>
+        <p>eframe/egui tab views and shared chart utilities.</p>
         <ul>
-          <li>dashboard.rs — 3D probability plot</li>
-          <li>correlation_view.rs — lookback selector, PC loadings heatmap, MP noise indicators</li>
-          <li>sector_view, bond_view, kurtosis_view — charts</li>
-          <li>nn_view — training UI, predictions</li>
-          <li>chart_utils.rs — shared height_control</li>
+          <li>dashboard.rs — summary metric cards, 3D probability distribution plot (plotters, draggable pitch/yaw), sector performance bar chart, put/call ratio + SKEW charts</li>
+          <li>sector_view.rs — price, rolling volatility, vol ratio charts per sector</li>
+          <li>correlation_view.rs — lookback selector (30/60/90d), correlation grid, PCA loadings heatmap, Marchenko-Pastur noise indicators</li>
+          <li>bond_view.rs — yield curve, 10Y-2Y term spread, curve slope</li>
+          <li>kurtosis_view.rs — distribution KDE, rolling kurtosis/skewness, acceleration chart; window selector</li>
+          <li>nn_view.rs — training controls (start/pause/resume), loss curve, compute stats panel, predictions table</li>
+          <li>settings_view.rs — API key editor (show/hide, save to .env), screenshot settings (path/format/compression), NN feature flag toggles</li>
+          <li>chart_utils.rs — height_control(), HoverSeries, shared helpers</li>
         </ul>
       </div>
+
     </div>
   </section>
 
@@ -317,20 +356,27 @@ flowchart TB
     <h2>Cargo dependencies</h2>
     <table class="dep-table">
       <thead>
-        <tr><th>Category</th><th>Crate</th><th>Purpose</th></tr>
+        <tr><th>Category</th><th>Crate</th><th>Version</th><th>Purpose</th></tr>
       </thead>
       <tbody>
-        <tr><td class="category">GUI</td><td>eframe</td><td>egui desktop app (0.30)</td></tr>
-        <tr><td class="category">GUI</td><td>egui_plot</td><td>Plots in egui (0.30)</td></tr>
-        <tr><td class="category">Async</td><td>tokio</td><td>Async runtime</td></tr>
-        <tr><td class="category">Data</td><td>yahoo_finance_api</td><td>Yahoo Finance OHLCV</td></tr>
-        <tr><td class="category">Data</td><td>reqwest</td><td>HTTP client (FMP API)</td></tr>
-        <tr><td class="category">Serde</td><td>serde, serde_json</td><td>Serialize/deserialize</td></tr>
-        <tr><td class="category">Serde</td><td>chrono, time</td><td>Dates, timestamps</td></tr>
-        <tr><td class="category">NN</td><td>burn</td><td>Deep learning (wgpu, train, ndarray)</td></tr>
-        <tr><td class="category">NN</td><td>wgpu</td><td>GPU backend</td></tr>
-        <tr><td class="category">Plot</td><td>plotters</td><td>3D dashboard plot</td></tr>
-        <tr><td class="category">Utils</td><td>sysinfo, directories, tracing, anyhow</td><td>System info, config, logging</td></tr>
+        <tr><td class="category">GUI</td><td>eframe</td><td>0.30</td><td>egui desktop app framework</td></tr>
+        <tr><td class="category">GUI</td><td>egui_plot</td><td>0.30</td><td>2D plots inside egui</td></tr>
+        <tr><td class="category">Async</td><td>tokio</td><td>1 (full)</td><td>Async runtime for data fetching</td></tr>
+        <tr><td class="category">Data</td><td>yahoo_finance_api</td><td>4</td><td>Yahoo Finance OHLCV data</td></tr>
+        <tr><td class="category">Data</td><td>reqwest</td><td>0.12</td><td>HTTP client (FMP API, CBOE CSVs)</td></tr>
+        <tr><td class="category">Serde</td><td>serde, serde_json</td><td>1</td><td>JSON serialization/deserialization</td></tr>
+        <tr><td class="category">Serde</td><td>chrono</td><td>0.4</td><td>Dates, timestamps (NaiveDate)</td></tr>
+        <tr><td class="category">Serde</td><td>time</td><td>0.3</td><td>Yahoo API date compatibility</td></tr>
+        <tr><td class="category">Serde</td><td>csv</td><td>1</td><td>CBOE CSV parsing (put/call, SKEW)</td></tr>
+        <tr><td class="category">NN</td><td>burn</td><td>0.16</td><td>Deep learning (wgpu + ndarray backends)</td></tr>
+        <tr><td class="category">NN</td><td>wgpu</td><td>23</td><td>GPU backend for burn</td></tr>
+        <tr><td class="category">Plot</td><td>plotters</td><td>0.3</td><td>3D probability distribution plot</td></tr>
+        <tr><td class="category">Image</td><td>image</td><td>0.25</td><td>PNG/JPEG/TIFF screenshot encoding</td></tr>
+        <tr><td class="category">Utils</td><td>sysinfo</td><td>0.32</td><td>CPU/memory usage during training</td></tr>
+        <tr><td class="category">Utils</td><td>directories</td><td>5</td><td>Platform config directories</td></tr>
+        <tr><td class="category">Utils</td><td>dotenvy</td><td>0.15</td><td>.env file loading</td></tr>
+        <tr><td class="category">Utils</td><td>tracing, tracing-subscriber</td><td>0.1 / 0.3</td><td>Structured logging</td></tr>
+        <tr><td class="category">Utils</td><td>anyhow</td><td>1</td><td>Error handling</td></tr>
       </tbody>
     </table>
   </section>
@@ -339,39 +385,45 @@ flowchart TB
     <h2>Data flow</h2>
     <div class="mermaid">
 flowchart LR
-  subgraph ext["External APIs"]
+  subgraph ext["External Sources"]
     YH[Yahoo Finance]
     FMP[Financial Modeling Prep]
+    CBOE[CBOE CDN]
   end
-  subgraph data["data"]
+  subgraph dataMod["data"]
     cache[cache]
     yahoo[yahoo]
     fmp[fmp]
+    cboe[cboe]
     models[models]
   end
-  subgraph app["app"]
-    state[AppState]
+  subgraph appMod["app / AppState"]
+    state[MarketData + AnalysisResults]
   end
-  subgraph analysis["analysis"]
+  subgraph analysisMod["analysis"]
     vol[volatility]
     corr[cross_sector]
     bonds[bond_spreads]
     kurt[kurtosis]
     rand[randomness]
   end
-  subgraph nn["nn"]
+  subgraph nnMod["nn"]
     ds[dataset]
     train[training]
+    persist[persistence]
   end
-  subgraph ui["ui"]
+  subgraph uiMod["ui"]
     views[7 tab views]
   end
   YH --> yahoo
   FMP --> fmp
+  CBOE --> cboe
   yahoo --> cache
   fmp --> cache
+  cboe --> cache
   yahoo --> models
   fmp --> models
+  cboe --> models
   models --> state
   state --> vol
   state --> corr
@@ -386,8 +438,35 @@ flowchart LR
   state --> ds
   ds --> train
   train --> state
+  persist --> state
+  state --> persist
   state --> views
-  </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>AppState key fields</h2>
+    <table class="dep-table">
+      <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>active_tab</td><td>Tab</td><td>Currently displayed tab</td></tr>
+        <tr><td>market_data</td><td>MarketData</td><td>Sectors, benchmark, treasury rates, put/call, SKEW</td></tr>
+        <tr><td>analysis</td><td>AnalysisResults</td><td>Volatility, correlation, PCA, bond spreads, kurtosis, randomness</td></tr>
+        <tr><td>kurtosis_window</td><td>usize</td><td>Rolling window for kurtosis (default 30 bars)</td></tr>
+        <tr><td>corr_lookback</td><td>usize</td><td>Windowed correlation lookback (30/60/90 days)</td></tr>
+        <tr><td>fmp_api_key</td><td>String</td><td>Runtime-editable FMP key; saved to .env on disk</td></tr>
+        <tr><td>nn_feature_flags</td><td>NnFeatureFlags</td><td>Toggles: sector_volatility, market_randomness, kurtosis</td></tr>
+        <tr><td>screenshot_settings</td><td>ScreenshotSettings</td><td>Save path, file type (PNG/JPEG/TIFF), compression</td></tr>
+        <tr><td>training_status</td><td>TrainingStatus</td><td>Idle / Training{epoch,loss} / Paused / Complete / Error</td></tr>
+        <tr><td>compute_stats</td><td>ComputeStats</td><td>CPU%, memory, GPU name/VRAM/utilization/temp, samples/s</td></tr>
+        <tr><td>loaded_model</td><td>Option&lt;LoadedModel&gt;</td><td>Model loaded from disk at startup (avoids retraining)</td></tr>
+        <tr><td>available_gpus</td><td>Vec&lt;GpuAdapterInfo&gt;</td><td>WGPU-capable adapters detected at startup</td></tr>
+        <tr><td>plot_3d</td><td>Plot3DState</td><td>3D plot pitch/yaw/texture/sector pair selection</td></tr>
+        <tr><td>chart_heights</td><td>ChartHeights</td><td>Per-chart height overrides (12 adjustable charts)</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <script>
